@@ -8,6 +8,6 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001',
     },
-    allowedHosts:'meeting.n8nfmc.io.vn',
+    allowedHosts: ['meeting.n8nfmc.io.vn'],
   },
 })
