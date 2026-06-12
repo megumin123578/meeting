@@ -35,7 +35,6 @@ app.get('*', (req, res) => {
 // Start listening
 app.listen(PORT, () => {
   console.log(`=========================================`);
-  console.log(`  Speech Translator backend is running   `);
   console.log(`  URL: http://localhost:${PORT}          `);
   console.log(`=========================================`);
 });
