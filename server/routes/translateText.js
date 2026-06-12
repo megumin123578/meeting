@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { logDebug, logError } = require('../utils/logger');
 
 router.post('/translate-text', async (req, res) => {
   const apiKey = req.headers['x-gemini-api-key'];
-  const { text, sourceLang, targetLang, model = 'gemini-2.5-flash' } = req.body;
+  const { text, sourceLang, targetLang, model = process.env.DEFAULT_MODEL || 'gemini-2.5-flash' } = req.body;
 
   if (!apiKey) {
     return res.status(400).json({ error: 'Missing API Key in request headers.' });
@@ -60,7 +61,7 @@ Return ONLY valid JSON with format: { "translatedText": "..." }`;
           try {
             parsedJson = JSON.parse(jsonStr);
           } catch (e3) {
-            console.error('All JSON parsing attempts failed:', e3);
+            logDebug('Gemini text JSON parse fallback', e3.message);
           }
         }
       }
@@ -78,7 +79,7 @@ Return ONLY valid JSON with format: { "translatedText": "..." }`;
       translatedText: cleanText,
     });
   } catch (error) {
-    console.error('Gemini Text Translation Error:', error);
+    logError('Gemini text translation', error);
     return res.status(500).json({ error: error.message || 'Translation failed.' });
   }
 });

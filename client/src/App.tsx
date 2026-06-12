@@ -27,6 +27,7 @@ export const App: React.FC = () => {
     apiKey,
     saveApiKey,
     isKeyValid,
+    keyError,
     checkApiKey,
     ttsStatus,
     checkEdgeTTS,
@@ -127,7 +128,6 @@ export const App: React.FC = () => {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <span className="app-subtitle font-mono">v1.0.0 Portable</span>
           <div
             title="Đường truyền hoàn toàn bảo mật từ máy của bạn"
             style={{
@@ -150,6 +150,7 @@ export const App: React.FC = () => {
             apiKey={apiKey}
             onSaveKey={saveApiKey}
             isKeyValid={isKeyValid}
+            keyError={keyError}
             onCheckKey={checkApiKey}
             ttsStatus={ttsStatus}
             onCheckTTS={checkEdgeTTS}

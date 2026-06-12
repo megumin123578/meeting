@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Key, ChevronDown, ChevronUp, Activity, RefreshCw } from 'lucide-react';
 
@@ -6,9 +6,10 @@ interface AdminPanelProps {
   apiKey: string;
   onSaveKey: (key: string) => void;
   isKeyValid: 'valid' | 'invalid' | 'unchecked' | 'checking';
-  onCheckKey: (keyToCheck?: string) => Promise<boolean>;
+  keyError: string;
+  onCheckKey: (keyToCheck?: string, modelToCheck?: string) => Promise<boolean>;
   ttsStatus: 'ready' | 'error' | 'checking' | 'unconfigured';
-  onCheckTTS: () => void;
+  onCheckTTS: () => Promise<void> | void;
   model: string;
   onSaveModel: (model: string) => void;
 }
@@ -17,6 +18,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   apiKey,
   onSaveKey,
   isKeyValid,
+  keyError,
   onCheckKey,
   ttsStatus,
   onCheckTTS,
@@ -42,8 +44,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const handleTest = async () => {
     setTesting(true);
     onSaveKey(localKey); // Auto-save first
-    await onCheckKey(localKey); // Validate with the input key
-    setTesting(false);
+    try {
+      await Promise.all([
+        onCheckKey(localKey, model), // Validate with the input key and selected model
+        onCheckTTS(),
+      ]);
+    } finally {
+      setTesting(false);
+    }
   };
 
   return (
@@ -51,7 +59,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       <div className="panel-header" onClick={() => setIsOpen(!isOpen)}>
         <h2>
           <Key size={18} className="logo-icon" />
-          Cấu hình API Key (Admin)
+          Cáº¥u hÃ¬nh API Key (Admin)
         </h2>
         {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </div>
@@ -77,14 +85,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     onChange={(e) => setLocalKey(e.target.value)}
                   />
                   <button className="btn btn-secondary font-mono" onClick={handleSave}>
-                    Lưu
+                    LÆ°u
                   </button>
                 </div>
               </div>
 
               {/* Model selection dropdown */}
               <div className="input-group">
-                <label className="input-label">Mô hình AI (Model)</label>
+                <label className="input-label">MÃ´ hÃ¬nh AI (Model)</label>
                 <select
                   className="input-control"
                   value={isCustomMode ? 'custom' : model}
@@ -104,7 +112,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       {opt.label}
                     </option>
                   ))}
-                  <option value="custom" style={{ background: 'var(--bg-input)' }}>Tùy chỉnh (Nhập slug)...</option>
+                  <option value="custom" style={{ background: 'var(--bg-input)' }}>TÃ¹y chá»‰nh (Nháº­p slug)...</option>
                 </select>
               </div>
 
@@ -113,7 +121,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <input
                     type="text"
                     className="input-control font-mono"
-                    placeholder="Nhập Gemini model slug"
+                    placeholder="Nháº­p Gemini model slug"
                     value={customModelText}
                     onChange={(e) => {
                       const val = e.target.value;
@@ -128,7 +136,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <button
                   className="btn btn-primary"
                   onClick={handleTest}
-                  disabled={testing || !localKey}
+                  disabled={testing}
                   style={{ flex: 1, minWidth: '160px' }}
                 >
                   {testing ? (
@@ -136,14 +144,14 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   ) : (
                     <Activity size={16} />
                   )}
-                  Kiểm tra kết nối Gemini
+                  Kiểm tra kết nối
                 </button>
                 
                 <button
                   className="btn btn-secondary"
                   onClick={onCheckTTS}
                   disabled={ttsStatus === 'checking'}
-                  title="Kiểm tra lại trạng thái Edge TTS"
+                  title="Kiá»ƒm tra láº¡i tráº¡ng thÃ¡i Edge TTS"
                   style={{ width: '40px', padding: 0 }}
                 >
                   <RefreshCw size={16} className={ttsStatus === 'checking' ? 'animate-spin' : ''} />
@@ -154,37 +162,50 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    Trạng thái Gemini:
+                    Tráº¡ng thÃ¡i Gemini:
                   </span>
                   {isKeyValid === 'valid' && (
-                    <span className="status-badge success font-mono">✅ Hoạt động</span>
+                    <span className="status-badge success font-mono">âœ… Hoáº¡t Ä‘á»™ng</span>
                   )}
                   {isKeyValid === 'invalid' && (
-                    <span className="status-badge error font-mono">❌ Lỗi key</span>
+                    <span className="status-badge error font-mono">âŒ Lá»—i key</span>
                   )}
                   {isKeyValid === 'checking' && (
-                    <span className="status-badge warning font-mono">Đang kiểm tra...</span>
+                    <span className="status-badge warning font-mono">Äang kiá»ƒm tra...</span>
                   )}
                   {isKeyValid === 'unchecked' && (
-                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>Chưa xác thực</span>
+                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>ChÆ°a xÃ¡c thá»±c</span>
                   )}
                 </div>
+                {isKeyValid === 'invalid' && keyError && (
+                  <div
+                    className="font-mono"
+                    style={{
+                      fontSize: '0.72rem',
+                      color: 'var(--color-error)',
+                      lineHeight: 1.4,
+                      overflowWrap: 'anywhere',
+                    }}
+                  >
+                    {keyError}
+                  </div>
+                )}
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    Trạng thái Edge TTS:
+                    Tráº¡ng thÃ¡i Edge TTS:
                   </span>
                   {ttsStatus === 'ready' && (
-                    <span className="status-badge success font-mono">✅ Edge TTS Local — Sẵn sàng</span>
+                    <span className="status-badge success font-mono">âœ… Edge TTS Local â€” Sáºµn sÃ ng</span>
                   )}
                   {ttsStatus === 'error' && (
-                    <span className="status-badge error font-mono">❌ Edge TTS lỗi — Liên hệ hỗ trợ</span>
+                    <span className="status-badge error font-mono">âŒ Edge TTS lá»—i â€” LiÃªn há»‡ há»— trá»£</span>
                   )}
                   {ttsStatus === 'checking' && (
-                    <span className="status-badge warning font-mono">Đang kiểm tra...</span>
+                    <span className="status-badge warning font-mono">Äang kiá»ƒm tra...</span>
                   )}
                   {ttsStatus === 'unconfigured' && (
-                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>Chưa cấu hình</span>
+                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>Chưa kiểm tra</span>
                   )}
                 </div>
               </div>

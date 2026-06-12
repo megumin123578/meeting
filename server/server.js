@@ -1,7 +1,7 @@
-require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const testKeyRoute = require('./routes/testKey');
 const translateAudioRoute = require('./routes/translateAudio');
@@ -11,8 +11,15 @@ const translateTextRoute = require('./routes/translateText');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Resolve allowed CORS origin(s) from env: "*" (any) or a comma-separated list
+const corsOriginEnv = (process.env.CORS_ORIGIN || '*').trim();
+const corsOrigin =
+  corsOriginEnv === '*'
+    ? true
+    : corsOriginEnv.split(',').map((o) => o.trim()).filter(Boolean);
+
 // Middlewares
-app.use(cors());
+app.use(cors({ origin: corsOrigin }));
 // Set payload limits high enough to handle base64 audio uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));

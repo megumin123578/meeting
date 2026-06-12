@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const voiceMap = require('../utils/voiceMap');
 const { Communicate } = require('edge-tts-ts');
+const { logError } = require('../utils/logger');
 
 // Fallback voice if language not in map
 const DEFAULT_VOICE = 'en-US-JennyNeural';
@@ -39,7 +40,7 @@ router.post('/tts', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('[TTS] Local Edge TTS error:', error.message);
+    logError('TTS local Edge', error);
     return res.status(500).json({ error: error.message || 'TTS request failed.' });
   }
 });

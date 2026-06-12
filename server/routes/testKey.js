@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { logError } = require('../utils/logger');
 
 router.get('/test-key', async (req, res) => {
   const apiKey = req.headers['x-gemini-api-key'];
-  const model = 'gemini-2.5-flash';
+  const model = (req.query.model || process.env.DEFAULT_MODEL || 'gemini-2.5-flash').toString().trim();
 
   if (!apiKey) {
     return res.status(400).json({ ok: false, message: 'Missing API Key in request headers.' });
@@ -28,7 +29,7 @@ router.get('/test-key', async (req, res) => {
       message: errData.error?.message || `Gemini API returned status ${response.status}`,
     });
   } catch (error) {
-    console.error('Gemini Key Verification Error:', error);
+    logError('Gemini key verification', error);
     return res.json({
       ok: false,
       message: error.message || 'Connection issue with Gemini API.',

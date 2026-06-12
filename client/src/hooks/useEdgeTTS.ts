@@ -43,13 +43,11 @@ export const useEdgeTTS = ({ onShowToast }: UseEdgeTTSProps) => {
     setPlayingCardId(playKey);
 
     try {
-      const apiKey = localStorage.getItem('gemini_api_key') || '';
       // 1. Call Local Edge TTS Backend
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-gemini-api-key': apiKey,
         },
         body: JSON.stringify({ text, language }),
       });
@@ -59,7 +57,10 @@ export const useEdgeTTS = ({ onShowToast }: UseEdgeTTSProps) => {
         throw new Error(errorData.error || 'TTS service error');
       }
 
-      const { audioBase64, mimeType } = await response.json();
+      const { audioBase64, error, mimeType } = await response.json();
+      if (error || !audioBase64) {
+        throw new Error(error || 'TTS service returned no audio');
+      }
       // Keep loading indicator until playback finishes (handled later)
 
       // Play the Base64 response

@@ -18,6 +18,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     return localStorage.getItem('gemini_api_key') || '';
   });
   const [isKeyValid, setIsKeyValid] = useState<'valid' | 'invalid' | 'unchecked' | 'checking'>('unchecked');
+  const [keyError, setKeyError] = useState<string>('');
   const [ttsStatus, setTtsStatus] = useState<'ready' | 'error' | 'checking' | 'unconfigured'>('unconfigured');
   const [isTranslating, setIsTranslating] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>(() => {
@@ -25,7 +26,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     return saved ? JSON.parse(saved) : [];
   });
   const [model, setModel] = useState<string>(() => {
-    return localStorage.getItem('gemini_model') || 'gemini-2.5-flash';
+    return localStorage.getItem('gemini_model') || import.meta.env.VITE_DEFAULT_MODEL || 'gemini-2.5-flash';
   });
 
   const saveModel = (selectedModel: string) => {
@@ -44,47 +45,45 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     setIsKeyValid('unchecked');
   };
 
-  const checkApiKey = useCallback(async (keyToCheck?: string) => {
+  const checkApiKey = useCallback(async (keyToCheck?: string, modelToCheck?: string) => {
     const key = keyToCheck !== undefined ? keyToCheck : apiKey;
+    const selectedModel = (modelToCheck !== undefined ? modelToCheck : model).trim();
     if (!key) {
+      setKeyError('Chưa nhập API Key.');
       setIsKeyValid('invalid');
       return false;
     }
 
+    setKeyError('');
     setIsKeyValid('checking');
     try {
-      const response = await fetch('/api/test-key', {
+      const response = await fetch(`/api/test-key?model=${encodeURIComponent(selectedModel)}`, {
         method: 'GET',
         headers: {
           'x-gemini-api-key': key,
         },
       });
 
-      if (!response.ok) {
-        throw new Error('Key validation endpoint failed');
-      }
+      const data = await response.json().catch(() => ({}));
 
-      const data = await response.json();
-      if (data.ok) {
+      if (response.ok && data.ok) {
+        setKeyError('');
         setIsKeyValid('valid');
         return true;
-      } else {
-        setIsKeyValid('invalid');
-        return false;
       }
-    } catch (err) {
+
+      setKeyError(data.message || data.error || `Key validation failed (HTTP ${response.status}).`);
+      setIsKeyValid('invalid');
+      return false;
+    } catch (err: any) {
       console.error('API key check failed:', err);
+      setKeyError(err?.message || 'Không kết nối được tới server.');
       setIsKeyValid('invalid');
       return false;
     }
   }, [apiKey, model, onShowToast]);
 
   const checkEdgeTTS = useCallback(async () => {
-    const currentKey = apiKey || localStorage.getItem('gemini_api_key') || '';
-    if (!currentKey) {
-      setTtsStatus('unconfigured');
-      return;
-    }
     setTtsStatus('checking');
     try {
       // Call with a small test string
@@ -92,47 +91,27 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-gemini-api-key': currentKey,
         },
         body: JSON.stringify({ text: 'Status check', language: 'en-US' }),
       });
 
-      if (response.ok) {
+      const data = await response.json().catch(() => ({}));
+
+      if (response.ok && !data.error && data.audioBase64) {
         setTtsStatus('ready');
       } else {
-        if (isKeyValid === 'valid') {
-          setTtsStatus('error');
-        } else {
-          setTtsStatus('unconfigured');
-        }
+        setTtsStatus('error');
       }
     } catch (err) {
       console.error('Edge TTS check failed:', err);
-      if (isKeyValid === 'valid') {
-        setTtsStatus('error');
-      } else {
-        setTtsStatus('unconfigured');
-      }
+      setTtsStatus('error');
     }
-  }, [apiKey, isKeyValid]);
+  }, []);
 
   // Persist transcripts
   useEffect(() => {
     localStorage.setItem('translator_transcripts', JSON.stringify(transcripts));
   }, [transcripts]);
-
-  // Run diagnostics when checkEdgeTTS function updates
-  useEffect(() => {
-    checkEdgeTTS();
-  }, [checkEdgeTTS]);
-
-  // Automatically check the API key's validity on mount if it exists
-  useEffect(() => {
-    const storedKey = localStorage.getItem('gemini_api_key') || '';
-    if (storedKey) {
-      checkApiKey(storedKey);
-    }
-  }, []);
 
   const translateAudio = async (
     audioBase64: string,
@@ -257,6 +236,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     apiKey,
     saveApiKey,
     isKeyValid,
+    keyError,
     checkApiKey,
     ttsStatus,
     checkEdgeTTS,

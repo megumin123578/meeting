@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
+const { logDebug, logError } = require('../utils/logger');
 
 router.post('/translate-audio', async (req, res) => {
   const apiKey = req.headers['x-gemini-api-key'];
-  const { audioBase64, mimeType, sourceLang, targetLang, model = 'gemini-2.5-flash' } = req.body;
+  const { audioBase64, mimeType, sourceLang, targetLang, model = process.env.DEFAULT_MODEL || 'gemini-2.5-flash' } = req.body;
 
   if (!apiKey) {
     return res.status(400).json({ error: 'Missing API Key in request headers.' });
@@ -46,7 +47,7 @@ router.post('/translate-audio', async (req, res) => {
 
     let text = responseData.candidates[0].content.parts[0].text.trim();
 
-    console.log('Gemini raw response:', text);
+    logDebug('Gemini audio raw response', text);
 
     let parsedJson = null;
 
@@ -71,7 +72,7 @@ router.post('/translate-audio', async (req, res) => {
           try {
             parsedJson = JSON.parse(jsonStr);
           } catch (e3) {
-            console.error('All JSON parsing attempts failed:', e3);
+            logDebug('Gemini audio JSON parse fallback', e3.message);
           }
         }
       }
@@ -122,13 +123,14 @@ router.post('/translate-audio', async (req, res) => {
       });
     }
 
-    console.error('Failed to parse or extract translation from Gemini response:', text);
+    logError('Gemini audio parse', 'Failed to parse or extract translation from Gemini response.');
+    logDebug('Gemini audio parse raw response', text);
     return res.status(500).json({
       error: 'API returned an invalid format. Please try again.',
       rawResponse: text,
     });
   } catch (error) {
-    console.error('Gemini Translation Error:', error);
+    logError('Gemini audio translation', error);
     return res.status(500).json({ error: error.message || 'Translation failed.' });
   }
 });
