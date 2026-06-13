@@ -4,7 +4,6 @@ import { useRecorder } from './hooks/useRecorder';
 import { useEdgeTTS } from './hooks/useEdgeTTS';
 import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
 import { AdminPanel } from './components/AdminPanel';
-import { LanguageSelector } from './components/LanguageSelector';
 import { RecordingStation } from './components/RecordingStation';
 import { TranscriptList } from './components/TranscriptList';
 import { Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -158,14 +157,6 @@ export const App: React.FC = () => {
             onSaveModel={saveModel}
           />
 
-          {/* Languages Configuration Dropdowns */}
-          <LanguageSelector
-            sourceLang={sourceLang}
-            setSourceLang={setSourceLang}
-            targetLang={targetLang}
-            setTargetLang={setTargetLang}
-          />
-
           {/* Audio Capturing Controls Station */}
           <RecordingStation
             isRecording={isRecording}
@@ -197,6 +188,10 @@ export const App: React.FC = () => {
             loadingCardId={loadingCardId}
             interimText={interimText}
             isTranslatingRealtime={isTranslatingRealtime}
+            sourceLang={sourceLang}
+            setSourceLang={setSourceLang}
+            targetLang={targetLang}
+            setTargetLang={setTargetLang}
           />
         </div>
       </div>

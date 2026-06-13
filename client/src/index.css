@@ -405,6 +405,51 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.5rem;
 }
 
+.transcript-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* Compact language selector (used inside transcript header) */
+.lang-selector-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.lang-select-compact {
+  font-size: 0.75rem;
+  padding: 0.35rem 1.75rem 0.35rem 0.6rem;
+  height: auto;
+  min-width: 130px;
+  max-width: 160px;
+  border-radius: 0.5rem;
+}
+
+.swap-btn-compact {
+  width: 26px;
+  height: 26px;
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .transcript-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+  .transcript-header-controls {
+    justify-content: space-between;
+  }
+  .lang-select-compact {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
 /* Transcripts Scrollable Content */
 .transcript-scroller {
   flex: 1;

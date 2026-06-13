@@ -2,6 +2,7 @@ import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import { FileDown, Trash2, MessageSquareDashed } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
+import { LanguageSelector } from './LanguageSelector';
 import type { TranscriptItem } from '../hooks/useTranslator';
 
 interface TranscriptListProps {
@@ -14,6 +15,10 @@ interface TranscriptListProps {
   loadingCardId: string | null;
   interimText?: string;
   isTranslatingRealtime?: boolean;
+  sourceLang: string;
+  setSourceLang: (lang: string) => void;
+  targetLang: string;
+  setTargetLang: (lang: string) => void;
 }
 
 export const TranscriptList: React.FC<TranscriptListProps> = ({
@@ -26,6 +31,10 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
   loadingCardId,
   interimText = '',
   isTranslatingRealtime = false,
+  sourceLang,
+  setSourceLang,
+  targetLang,
+  setTargetLang,
 }) => {
   
   const handleExportMarkdown = () => {
@@ -68,32 +77,42 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
           Lịch sử hội thoại
           <span className="transcript-count">{transcripts.length}</span>
         </h2>
-        
-        {transcripts.length > 0 && (
-          <div className="transcript-actions">
-            <button className="btn btn-secondary font-mono" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }} onClick={handleExportMarkdown}>
-              <FileDown size={14} />
-              Xuất Markdown
-            </button>
-            <button
-              className="btn btn-secondary font-mono"
-              style={{
-                fontSize: '0.75rem',
-                padding: '0.35rem 0.75rem',
-                color: '#ef4444',
-                borderColor: 'rgba(239, 68, 68, 0.15)',
-              }}
-              onClick={() => {
-                if (window.confirm('Bạn có chắc muốn xóa tất cả lịch sử hội thoại này không?')) {
-                  onClear();
-                }
-              }}
-            >
-              <Trash2 size={14} />
-              Xóa hết
-            </button>
-          </div>
-        )}
+
+        <div className="transcript-header-controls">
+          <LanguageSelector
+            sourceLang={sourceLang}
+            setSourceLang={setSourceLang}
+            targetLang={targetLang}
+            setTargetLang={setTargetLang}
+            compact
+          />
+
+          {transcripts.length > 0 && (
+            <div className="transcript-actions">
+              <button className="btn btn-secondary font-mono" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }} onClick={handleExportMarkdown}>
+                <FileDown size={14} />
+                Xuất Markdown
+              </button>
+              <button
+                className="btn btn-secondary font-mono"
+                style={{
+                  fontSize: '0.75rem',
+                  padding: '0.35rem 0.75rem',
+                  color: '#ef4444',
+                  borderColor: 'rgba(239, 68, 68, 0.15)',
+                }}
+                onClick={() => {
+                  if (window.confirm('Bạn có chắc muốn xóa tất cả lịch sử hội thoại này không?')) {
+                    onClear();
+                  }
+                }}
+              >
+                <Trash2 size={14} />
+                Xóa hết
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Main Scroller Area */}
