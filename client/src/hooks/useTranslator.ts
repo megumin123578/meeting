@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 export interface TranscriptItem {
   id: string;
@@ -11,38 +11,107 @@ export interface TranscriptItem {
 
 interface UseTranslatorProps {
   onShowToast: (message: string) => void;
+  token: string | null;
+  userId: string | null;
 }
 
-export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
-  const [apiKey, setApiKey] = useState<string>(() => {
-    return localStorage.getItem('gemini_api_key') || '';
-  });
+const DEFAULT_MODEL = (import.meta as any).env?.VITE_DEFAULT_MODEL || 'gemini-2.5-flash';
+
+const transcriptsKey = (userId: string | null) =>
+  userId ? `translator_transcripts_${userId}` : 'translator_transcripts_guest';
+
+export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps) => {
+  const [apiKey, setApiKey] = useState<string>('');
+  const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [isKeyValid, setIsKeyValid] = useState<'valid' | 'invalid' | 'unchecked' | 'checking'>('unchecked');
   const [keyError, setKeyError] = useState<string>('');
   const [ttsStatus, setTtsStatus] = useState<'ready' | 'error' | 'checking' | 'unconfigured'>('unconfigured');
   const [isTranslating, setIsTranslating] = useState(false);
   const [transcripts, setTranscripts] = useState<TranscriptItem[]>(() => {
-    const saved = localStorage.getItem('translator_transcripts');
+    const saved = localStorage.getItem(transcriptsKey(userId));
     return saved ? JSON.parse(saved) : [];
   });
-  const [model, setModel] = useState<string>(() => {
-    return localStorage.getItem('gemini_model') || import.meta.env.VITE_DEFAULT_MODEL || 'gemini-2.5-flash';
-  });
 
-  const saveModel = (selectedModel: string) => {
-    const cleanModel = selectedModel.trim();
-    localStorage.setItem('gemini_model', cleanModel);
-    setModel(cleanModel);
-  };
+  // Track current user to gate persistence (avoid writing during user-switch flicker)
+  const userIdRef = useRef(userId);
+  useEffect(() => {
+    userIdRef.current = userId;
+  }, [userId]);
 
+  // Load transcripts when user changes
+  useEffect(() => {
+    const saved = localStorage.getItem(transcriptsKey(userId));
+    setTranscripts(saved ? JSON.parse(saved) : []);
+  }, [userId]);
 
+  // Persist transcripts (scoped per user)
+  useEffect(() => {
+    if (userIdRef.current !== userId) return;
+    localStorage.setItem(transcriptsKey(userId), JSON.stringify(transcripts));
+  }, [transcripts, userId]);
+
+  // Load API key + model from server when user logs in
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!token) {
+        setApiKey('');
+        setModel(DEFAULT_MODEL);
+        setIsKeyValid('unchecked');
+        setKeyError('');
+        return;
+      }
+      try {
+        const res = await fetch('/api/user/config', {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (cancelled) return;
+        setApiKey(data.apiKey || '');
+        setModel((data.model && data.model.trim()) || DEFAULT_MODEL);
+        setIsKeyValid('unchecked');
+        setKeyError('');
+      } catch (err) {
+        console.warn('Failed to load user config:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const pushConfig = useCallback(
+    async (patch: { apiKey?: string; model?: string }) => {
+      if (!token) return;
+      try {
+        await fetch('/api/user/config', {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(patch),
+        });
+      } catch (err) {
+        console.warn('Failed to save user config:', err);
+        onShowToast('⚠️ Không lưu được cấu hình lên server.');
+      }
+    },
+    [token, onShowToast]
+  );
 
   const saveApiKey = (key: string) => {
     const cleanKey = key.trim();
-    localStorage.setItem('gemini_api_key', cleanKey);
     setApiKey(cleanKey);
-    // Removed duplicate checkApiKey call from here to make saving instant
     setIsKeyValid('unchecked');
+    void pushConfig({ apiKey: cleanKey });
+  };
+
+  const saveModel = (selectedModel: string) => {
+    const cleanModel = selectedModel.trim();
+    setModel(cleanModel);
+    void pushConfig({ model: cleanModel });
   };
 
   const checkApiKey = useCallback(async (keyToCheck?: string, modelToCheck?: string) => {
@@ -81,12 +150,11 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
       setIsKeyValid('invalid');
       return false;
     }
-  }, [apiKey, model, onShowToast]);
+  }, [apiKey, model]);
 
   const checkEdgeTTS = useCallback(async () => {
     setTtsStatus('checking');
     try {
-      // Call with a small test string
       const response = await fetch('/api/tts', {
         method: 'POST',
         headers: {
@@ -108,11 +176,6 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     }
   }, []);
 
-  // Persist transcripts
-  useEffect(() => {
-    localStorage.setItem('translator_transcripts', JSON.stringify(transcripts));
-  }, [transcripts]);
-
   const translateAudio = async (
     audioBase64: string,
     mimeType: string,
@@ -120,7 +183,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     targetLang: string
   ) => {
     if (!apiKey) {
-      onShowToast('⚠️ Vui lòng cấu hình OpenRouter API Key trước khi thực hiện dịch.');
+      onShowToast('⚠️ Vui lòng cấu hình Gemini API Key trước khi thực hiện dịch.');
       setIsKeyValid('invalid');
       return;
     }
@@ -148,7 +211,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
       }
 
       const data = await response.json();
-      
+
       const newTranscript: TranscriptItem = {
         id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -173,7 +236,7 @@ export const useTranslator = ({ onShowToast }: UseTranslatorProps) => {
     targetLang: string
   ): Promise<string> => {
     if (!apiKey) {
-      onShowToast('⚠️ Vui lòng cấu hình OpenRouter API Key trước khi thực hiện dịch.');
+      onShowToast('⚠️ Vui lòng cấu hình Gemini API Key trước khi thực hiện dịch.');
       setIsKeyValid('invalid');
       throw new Error('API Key missing');
     }

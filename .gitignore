@@ -32,6 +32,9 @@ cache/
 *.wav
 *.webm
 
+# User data store
+server/data/
+
 # Editor and OS files
 .vscode/*
 !.vscode/extensions.json

@@ -7,6 +7,8 @@ const testKeyRoute = require('./routes/testKey');
 const translateAudioRoute = require('./routes/translateAudio');
 const ttsRoute = require('./routes/tts');
 const translateTextRoute = require('./routes/translateText');
+const authRoute = require('./routes/auth');
+const userConfigRoute = require('./routes/userConfig');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -25,6 +27,8 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // API Endpoints
+app.use('/api', authRoute);
+app.use('/api', userConfigRoute);
 app.use('/api', testKeyRoute);
 app.use('/api', translateAudioRoute);
 app.use('/api', ttsRoute);

@@ -3,17 +3,42 @@ import { useTranslator } from './hooks/useTranslator';
 import { useRecorder } from './hooks/useRecorder';
 import { useEdgeTTS } from './hooks/useEdgeTTS';
 import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
+import { useAuth, type AuthUser } from './hooks/useAuth';
 import { AdminPanel } from './components/AdminPanel';
 import { RecordingStation } from './components/RecordingStation';
 import { TranscriptList } from './components/TranscriptList';
-import { Sparkles, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { LoginPage } from './components/LoginPage';
+import { Sparkles, CheckCircle2, AlertTriangle, LogOut, User, Loader2 } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const { token, user, loading, login, register, logout } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="login-shell">
+        <Loader2 size={32} className="animate-spin logo-icon" />
+      </div>
+    );
+  }
+
+  if (!token || !user) {
+    return <LoginPage onLogin={login} onRegister={register} />;
+  }
+
+  return <AuthedApp token={token} user={user} onLogout={logout} />;
+};
+
+interface AuthedAppProps {
+  token: string;
+  user: AuthUser;
+  onLogout: () => void;
+}
+
+const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sourceLang, setSourceLang] = useState('en-US');
   const [targetLang, setTargetLang] = useState('vi-VN');
 
-  // Trigger transient notifications
   const showToast = (message: string) => {
     setToastMessage(message);
     setTimeout(() => {
@@ -21,7 +46,6 @@ export const App: React.FC = () => {
     }, 4000);
   };
 
-  // 1. Initialise Translator Hooks (Keys, diagnostics, histories)
   const {
     apiKey,
     saveApiKey,
@@ -39,9 +63,8 @@ export const App: React.FC = () => {
     addTranscriptItem,
     model,
     saveModel,
-  } = useTranslator({ onShowToast: showToast });
+  } = useTranslator({ onShowToast: showToast, token, userId: user.id });
 
-  // 2. Initialise Audio Player Hooks (Edge TTS Subprocess + WebSpeech API Fallbacks)
   const {
     loadingCardId,
     playingCardId,
@@ -50,7 +73,6 @@ export const App: React.FC = () => {
     stopSpeaking,
   } = useEdgeTTS({ onShowToast: showToast });
 
-  // 3. Initialise Recorder Hooks (Push-to-Talk, Toggles, Cabin slices)
   const {
     isRecording,
     startRecording,
@@ -63,7 +85,6 @@ export const App: React.FC = () => {
   } = useRecorder({
     onAudioReady: async (base64Audio, mimeType, transcribedText) => {
       if (transcribedText) {
-        // If browser SpeechRecognition successfully transcribed locally, translate directly for free!
         try {
           const translated = await translateText(transcribedText, sourceLang, targetLang);
           addTranscriptItem(transcribedText, translated, sourceLang, targetLang);
@@ -72,7 +93,6 @@ export const App: React.FC = () => {
           translateAudio(base64Audio, mimeType, sourceLang, targetLang);
         }
       } else {
-        // Fallback for uploaded files or unsupported speech-recognition browsers
         translateAudio(base64Audio, mimeType, sourceLang, targetLang);
       }
     },
@@ -81,7 +101,6 @@ export const App: React.FC = () => {
     },
   });
 
-  // 4. Initialise Real-time Translator Hooks (Speech Recognition + API translation)
   const {
     realtimeMode,
     setRealtimeMode,
@@ -98,7 +117,6 @@ export const App: React.FC = () => {
     onShowToast: showToast,
   });
 
-  // Stop any reading playback or real-time listening if standard recording starts
   useEffect(() => {
     if (isRecording) {
       stopSpeaking();
@@ -106,7 +124,6 @@ export const App: React.FC = () => {
     }
   }, [isRecording]);
 
-  // Stop standard recording or reading playback if real-time listening starts
   useEffect(() => {
     if (isListening) {
       stopSpeaking();
@@ -118,7 +135,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-container">
-      {/* Premium Design Header */}
       <header className="app-header">
         <div className="app-title-section">
           <Sparkles size={28} className="logo-icon" />
@@ -127,6 +143,14 @@ export const App: React.FC = () => {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <span className="user-chip">
+            <User size={12} />
+            <strong>{user.username}</strong>
+          </span>
+          <button className="logout-btn" onClick={onLogout} title="Đăng xuất">
+            <LogOut size={12} />
+            Đăng xuất
+          </button>
           <div
             title="Đường truyền hoàn toàn bảo mật từ máy của bạn"
             style={{
@@ -140,11 +164,8 @@ export const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Grid Layout (Collapsible Settings & Record Side vs Transcript side) */}
       <div className="dashboard-grid">
-        {/* Left Column (Inputs, Configurations, Mic Status) */}
         <div className="sidebar-col">
-          {/* Admin API Configuration Panel */}
           <AdminPanel
             apiKey={apiKey}
             onSaveKey={saveApiKey}
@@ -157,7 +178,6 @@ export const App: React.FC = () => {
             onSaveModel={saveModel}
           />
 
-          {/* Audio Capturing Controls Station */}
           <RecordingStation
             isRecording={isRecording}
             startRecording={() => startRecording(sourceLang)}
@@ -176,7 +196,6 @@ export const App: React.FC = () => {
           />
         </div>
 
-        {/* Right Column (Scrollable Conversation History) */}
         <div className="content-col">
           <TranscriptList
             transcripts={transcripts}
@@ -196,7 +215,6 @@ export const App: React.FC = () => {
         </div>
       </div>
 
-      {/* Toast Alert Popups */}
       {toastMessage && (
         <div className="toast">
           {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
