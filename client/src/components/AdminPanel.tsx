@@ -11,7 +11,6 @@ interface AdminPanelProps {
   ttsStatus: 'ready' | 'error' | 'checking' | 'unconfigured';
   onCheckTTS: () => Promise<void> | void;
   model: string;
-  onSaveModel: (model: string) => void;
 }
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -23,33 +22,15 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   ttsStatus,
   onCheckTTS,
   model,
-  onSaveModel,
 }) => {
   const [isOpen, setIsOpen] = useState(true);
   const [localKey, setLocalKey] = useState(apiKey);
   const [testing, setTesting] = useState(false);
 
-  const modelOptions = [
-    { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
-    { value: 'gemini-3.5-live-translate-preview', label: 'Gemini 3.5 Live Translate' },
-  ];
-
-  const isPreset = modelOptions.some(opt => opt.value === model);
-  const [isCustomMode, setIsCustomMode] = useState(!isPreset);
-  const [customModelText, setCustomModelText] = useState(isPreset ? '' : model);
-
   // Sync local state when parent loads config from server asynchronously.
   useEffect(() => {
     setLocalKey(apiKey);
   }, [apiKey]);
-
-  useEffect(() => {
-    const matches = modelOptions.some((opt) => opt.value === model);
-    setIsCustomMode(!matches);
-    setCustomModelText(matches ? '' : model);
-    // modelOptions is constructed inline so we only depend on `model`
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model]);
 
   const handleSave = () => {
     onSaveKey(localKey);
@@ -68,14 +49,27 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
   };
 
+  const keyDot =
+    isKeyValid === 'valid' ? 'ok' :
+    isKeyValid === 'invalid' ? 'err' :
+    isKeyValid === 'checking' ? 'pending' : 'idle';
+  const ttsDot =
+    ttsStatus === 'ready' ? 'ok' :
+    ttsStatus === 'error' ? 'err' :
+    ttsStatus === 'checking' ? 'pending' : 'idle';
+
   return (
     <div className="panel-card">
       <div className="panel-header" onClick={() => setIsOpen(!isOpen)}>
         <h2>
           <Key size={18} className="logo-icon" />
-          Cấu hình API Key (Admin)
+          Cấu hình API Key
         </h2>
-        {isOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        <div className="status-pill-group" onClick={(e) => e.stopPropagation()}>
+          <span className={`status-pill ${keyDot}`} title="Gemini API">Gemini</span>
+          <span className={`status-pill ${ttsDot}`} title="Edge TTS">TTS</span>
+          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </div>
       </div>
 
       <AnimatePresence initial={false}>
@@ -104,48 +98,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               </div>
 
-              {/* Model selection dropdown */}
-              <div className="input-group">
-                <label className="input-label">Mô hình AI (Model)</label>
-                <select
-                  className="input-control"
-                  value={isCustomMode ? 'custom' : model}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === 'custom') {
-                      setIsCustomMode(true);
-                    } else {
-                      setIsCustomMode(false);
-                      onSaveModel(val);
-                    }
-                  }}
-                  style={{ background: 'var(--bg-input)', color: 'var(--color-text-primary)' }}
-                >
-                  {modelOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value} style={{ background: 'var(--bg-input)' }}>
-                      {opt.label}
-                    </option>
-                  ))}
-                  <option value="custom" style={{ background: 'var(--bg-input)' }}>Tùy chỉnh (Nhập slug)...</option>
-                </select>
-              </div>
-
-              {isCustomMode && (
-                <div className="input-group" style={{ marginTop: '-0.5rem' }}>
-                  <input
-                    type="text"
-                    className="input-control font-mono"
-                    placeholder="Nhập Gemini model slug"
-                    value={customModelText}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setCustomModelText(val);
-                      onSaveModel(val);
-                    }}
-                  />
-                </div>
-              )}
-
               <button
                 className="btn btn-primary"
                 onClick={handleTest}
@@ -160,57 +112,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 Kiểm tra kết nối
               </button>
 
-              {/* Status Badges Section */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    Trạng thái Gemini:
-                  </span>
-                  {isKeyValid === 'valid' && (
-                    <span className="status-badge success font-mono">✅ Hoạt động</span>
-                  )}
-                  {isKeyValid === 'invalid' && (
-                    <span className="status-badge error font-mono">❌ Lỗi key</span>
-                  )}
-                  {isKeyValid === 'checking' && (
-                    <span className="status-badge warning font-mono">Đang kiểm tra...</span>
-                  )}
-                  {isKeyValid === 'unchecked' && (
-                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>Chưa xác thực</span>
-                  )}
+              {isKeyValid === 'invalid' && keyError && (
+                <div
+                  className="font-mono"
+                  style={{
+                    fontSize: '0.72rem',
+                    color: 'var(--color-error)',
+                    lineHeight: 1.4,
+                    overflowWrap: 'anywhere',
+                    background: 'rgba(239, 68, 68, 0.06)',
+                    padding: '0.5rem 0.75rem',
+                    borderRadius: '0.5rem',
+                    border: '1px solid rgba(239, 68, 68, 0.2)',
+                  }}
+                >
+                  {keyError}
                 </div>
-                {isKeyValid === 'invalid' && keyError && (
-                  <div
-                    className="font-mono"
-                    style={{
-                      fontSize: '0.72rem',
-                      color: 'var(--color-error)',
-                      lineHeight: 1.4,
-                      overflowWrap: 'anywhere',
-                    }}
-                  >
-                    {keyError}
-                  </div>
-                )}
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-                    Trạng thái Edge TTS:
-                  </span>
-                  {ttsStatus === 'ready' && (
-                    <span className="status-badge success font-mono">✅ Edge TTS Local — Sẵn sàng</span>
-                  )}
-                  {ttsStatus === 'error' && (
-                    <span className="status-badge error font-mono">❌ Edge TTS lỗi — Liên hệ hỗ trợ</span>
-                  )}
-                  {ttsStatus === 'checking' && (
-                    <span className="status-badge warning font-mono">Đang kiểm tra...</span>
-                  )}
-                  {ttsStatus === 'unconfigured' && (
-                    <span className="status-badge warning font-mono" style={{ opacity: 0.7 }}>Chưa kiểm tra</span>
-                  )}
-                </div>
-              </div>
+              )}
             </div>
           </motion.div>
         )}

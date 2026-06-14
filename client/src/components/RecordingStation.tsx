@@ -1,333 +1,251 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Mic, Square, Layers } from 'lucide-react';
+import React, { useEffect, useRef } from 'react';
+import { Mic, Square } from 'lucide-react';
 import { WaveAnimation } from './WaveAnimation';
+import type { RecordingMode, InputStyle } from '../App';
 
 interface RecordingStationProps {
-  isRecording: boolean;
-  startRecording: () => void;
-  stopRecording: () => void;
-  cabinMode: boolean;
-  setCabinMode: (val: boolean) => void;
+  mode: RecordingMode;
+  setMode: (m: RecordingMode) => void;
+  inputStyle: InputStyle;
+  pttKey: string;
+  isLiveModelSelected: boolean;
+  isActive: boolean;
+  onStart: () => void;
+  onStop: () => void;
   cabinInterval: number;
   setCabinInterval: (val: number) => void;
   analyser: AnalyserNode | null;
   isTranslating: boolean;
-  realtimeMode: boolean;
-  setRealtimeMode: (val: boolean) => void;
-  isListening: boolean;
-  startListening: () => void;
-  stopListening: () => void;
-  liveMode?: boolean;
 }
 
+const MODE_OPTIONS: Array<{ value: RecordingMode; label: string; hint?: string }> = [
+  { value: 'normal', label: 'Bình thường', hint: 'Thu rồi gửi đi dịch' },
+  { value: 'cabin', label: 'Meeting Segment', hint: 'Tự cắt mỗi N giây' },
+  { value: 'realtime', label: 'Real-time (Web Speech)', hint: 'Browser transcribe streaming' },
+  { value: 'live', label: 'Live Translate (Gemini)' },
+];
+
 export const RecordingStation: React.FC<RecordingStationProps> = ({
-  isRecording,
-  startRecording,
-  stopRecording,
-  cabinMode,
-  setCabinMode,
+  mode,
+  setMode,
+  inputStyle,
+  pttKey,
+  isLiveModelSelected,
+  isActive,
+  onStart,
+  onStop,
   cabinInterval,
   setCabinInterval,
   analyser,
   isTranslating,
-  realtimeMode,
-  setRealtimeMode,
-  isListening,
-  startListening,
-  stopListening,
-  liveMode = false,
 }) => {
-  const [recordMode, setRecordMode] = useState<'toggle' | 'ptt'>('toggle');
   const isPttActiveRef = useRef(false);
 
-  // Push-to-Talk window listeners (handling mouseup outside button)
+  // PTT only applies to 'normal' mode
+  const usePtt = mode === 'normal' && inputStyle === 'ptt';
+
+  // Mouse / touch PTT: also handle release outside the button
   useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      if (recordMode === 'ptt' && isPttActiveRef.current) {
+    const handleGlobalUp = () => {
+      if (usePtt && isPttActiveRef.current) {
         isPttActiveRef.current = false;
-        stopRecording();
+        onStop();
       }
     };
-
-    if (recordMode === 'ptt') {
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-      window.addEventListener('touchend', handleGlobalMouseUp);
+    if (usePtt) {
+      window.addEventListener('mouseup', handleGlobalUp);
+      window.addEventListener('touchend', handleGlobalUp);
     }
-
     return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-      window.removeEventListener('touchend', handleGlobalMouseUp);
+      window.removeEventListener('mouseup', handleGlobalUp);
+      window.removeEventListener('touchend', handleGlobalUp);
     };
-  }, [recordMode, stopRecording]);
+  }, [usePtt, onStop]);
 
-  // Handle PTT press
+  // Keyboard PTT: hold the configured key to record
+  useEffect(() => {
+    if (!usePtt) return;
+
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== pttKey || e.repeat) return;
+      if (isTypingTarget(e.target)) return;
+      if (isPttActiveRef.current || isTranslating) return;
+      e.preventDefault();
+      isPttActiveRef.current = true;
+      onStart();
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== pttKey) return;
+      if (!isPttActiveRef.current) return;
+      e.preventDefault();
+      isPttActiveRef.current = false;
+      onStop();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [usePtt, pttKey, onStart, onStop, isTranslating]);
+
   const handlePttDown = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
-    if (recordMode !== 'ptt' || isRecording || isTranslating) return;
+    if (!usePtt || isActive || isTranslating) return;
     isPttActiveRef.current = true;
-    startRecording();
+    onStart();
   };
 
+  const currentMode = MODE_OPTIONS.find((m) => m.value === mode);
+
   return (
-    <div className="panel-card" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+    <div className="panel-card recording-station">
+      <div className="recording-station-header">
+        <h2>
           <Mic size={18} className="logo-icon" />
-          {liveMode ? 'Live Translate' : 'Recording Station'}
+          Recording Station
         </h2>
-        
-        {/* Toggle / PTT selector tabs */}
-        {!realtimeMode && !liveMode && (
-          <div
-            style={{
-              display: 'flex',
-              background: 'var(--bg-input)',
-              borderRadius: '0.35rem',
-              padding: '2px',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-          <button
-            className="font-mono"
-            style={{
-              background: recordMode === 'toggle' ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: 'none',
-              borderRadius: '0.25rem',
-              color: recordMode === 'toggle' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-              padding: '0.25rem 0.5rem',
-              fontSize: '0.65rem',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-            onClick={() => {
-              if (isRecording) stopRecording();
-              setRecordMode('toggle');
-            }}
-          >
-            Bật/Tắt
-          </button>
-          <button
-            className="font-mono"
-            style={{
-              background: recordMode === 'ptt' ? 'rgba(255,255,255,0.08)' : 'transparent',
-              border: 'none',
-              borderRadius: '0.25rem',
-              color: recordMode === 'ptt' ? 'var(--color-text-primary)' : 'var(--color-text-secondary)',
-              padding: '0.25rem 0.5rem',
-              fontSize: '0.65rem',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
-            onClick={() => {
-              if (isRecording) stopRecording();
-              setRecordMode('ptt');
-            }}
-          >
-            Nhấn-Giữ
-          </button>
+      </div>
+
+      <div className="mode-selector">
+        <label className="mode-label">Chế độ thu âm</label>
+        <select
+          className="model-select mode-select"
+          value={mode}
+          onChange={(e) => {
+            if (isActive) onStop();
+            setMode(e.target.value as RecordingMode);
+          }}
+        >
+          {MODE_OPTIONS.map((opt) => (
+            <option
+              key={opt.value}
+              value={opt.value}
+              disabled={opt.value === 'live' ? !isLiveModelSelected : isLiveModelSelected}
+            >
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        {currentMode?.hint && (
+          <span className="mode-hint font-mono">{currentMode.hint}</span>
+        )}
+      </div>
+
+      {mode === 'cabin' && (
+        <div className="cabin-interval-row">
+          <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
+            Chu kỳ:
+          </span>
+          <input
+            type="number"
+            min="5"
+            max="60"
+            value={cabinInterval}
+            disabled={isActive}
+            onChange={(e) => setCabinInterval(Math.max(5, parseInt(e.target.value) || 5))}
+            className="input-control font-mono"
+            style={{ width: '70px', padding: '0.3rem 0.5rem', textAlign: 'center' }}
+          />
+          <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+            giây
+          </span>
         </div>
       )}
-    </div>
 
-      {/* Wave visualizer */}
-      <WaveAnimation isRecording={isListening || isRecording} analyser={analyser} />
+      <WaveAnimation isRecording={isActive} analyser={analyser} />
 
-      {/* Recording controls */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-        {liveMode ? (
+        {usePtt ? (
           <button
-            className={`btn ${isRecording ? 'btn-secondary' : 'btn-primary'}`}
+            className="btn btn-primary record-btn"
             style={{
-              width: '100%',
-              height: '48px',
-              fontWeight: 'bold',
-              background: isRecording ? 'rgba(239, 68, 68, 0.2)' : undefined,
-              borderColor: isRecording ? 'rgba(239, 68, 68, 0.4)' : undefined,
-              color: isRecording ? '#ef4444' : undefined,
-              boxShadow: isRecording ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
-            }}
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isTranslating}
-          >
-            {isRecording ? (
-              <>
-                <Square size={18} fill="currentColor" />
-                Dừng Live Translate
-              </>
-            ) : (
-              <>
-                <Mic size={18} />
-                Bắt đầu Live Translate
-              </>
-            )}
-          </button>
-        ) : realtimeMode ? (
-          <button
-            className={`btn ${isListening ? 'btn-secondary' : 'btn-primary'}`}
-            style={{
-              width: '100%',
-              height: '48px',
-              fontWeight: 'bold',
-              background: isListening ? 'rgba(239, 68, 68, 0.2)' : undefined,
-              borderColor: isListening ? 'rgba(239, 68, 68, 0.4)' : undefined,
-              color: isListening ? '#ef4444' : undefined,
-              boxShadow: isListening ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined
-            }}
-            onClick={isListening ? stopListening : startListening}
-            disabled={isTranslating}
-          >
-            {isListening ? (
-              <>
-                <Square size={18} fill="currentColor" />
-                Dừng dịch trực tiếp
-              </>
-            ) : (
-              <>
-                <Mic size={18} />
-                Bắt đầu dịch trực tiếp
-              </>
-            )}
-          </button>
-        ) : recordMode === 'toggle' ? (
-          <button
-            className={`btn ${isRecording ? 'btn-secondary' : 'btn-primary'}`}
-            style={{
-              width: '100%',
-              height: '48px',
-              fontWeight: 'bold',
-              background: isRecording ? 'rgba(239, 68, 68, 0.2)' : undefined,
-              borderColor: isRecording ? 'rgba(239, 68, 68, 0.4)' : undefined,
-              color: isRecording ? '#ef4444' : undefined,
-              boxShadow: isRecording ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined
-            }}
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isTranslating}
-          >
-            {isRecording ? (
-              <>
-                <Square size={18} fill="currentColor" />
-                Dừng ghi âm
-              </>
-            ) : (
-              <>
-                <Mic size={18} />
-                Bắt đầu thu âm
-              </>
-            )}
-          </button>
-        ) : (
-          <button
-            className="btn btn-primary"
-            style={{
-              width: '100%',
-              height: '48px',
               userSelect: 'none',
-              background: isRecording ? 'rgba(239, 68, 68, 0.3)' : undefined,
-              borderColor: isRecording ? 'rgba(239, 68, 68, 0.5)' : undefined,
-              boxShadow: isRecording ? '0 0 15px rgba(239, 68, 68, 0.3)' : undefined,
-              cursor: isRecording ? 'grabbing' : 'pointer'
+              background: isActive ? 'rgba(239, 68, 68, 0.3)' : undefined,
+              borderColor: isActive ? 'rgba(239, 68, 68, 0.5)' : undefined,
+              boxShadow: isActive ? '0 0 15px rgba(239, 68, 68, 0.3)' : undefined,
+              cursor: isActive ? 'grabbing' : 'pointer',
             }}
             onMouseDown={handlePttDown}
             onTouchStart={handlePttDown}
             disabled={isTranslating}
           >
             <Mic size={18} />
-            {isRecording ? 'Đang thu... Buông chuột để dừng' : 'Giữ chuột để nói (Push-to-Talk)'}
+            {isActive
+              ? `Đang thu... Buông ${pttKey === 'Space' ? 'Space' : 'phím/chuột'} để dừng`
+              : `Giữ chuột hoặc phím ${displayKey(pttKey)} để nói`}
+          </button>
+        ) : (
+          <button
+            className={`btn ${isActive ? 'btn-secondary' : 'btn-primary'} record-btn`}
+            style={{
+              fontWeight: 'bold',
+              background: isActive ? 'rgba(239, 68, 68, 0.2)' : undefined,
+              borderColor: isActive ? 'rgba(239, 68, 68, 0.4)' : undefined,
+              color: isActive ? '#ef4444' : undefined,
+              boxShadow: isActive ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
+            }}
+            onClick={isActive ? onStop : onStart}
+            disabled={isTranslating}
+          >
+            {isActive ? (
+              <>
+                <Square size={18} fill="currentColor" />
+                {labelForActive(mode)}
+              </>
+            ) : (
+              <>
+                <Mic size={18} />
+                {labelForIdle(mode)}
+              </>
+            )}
           </button>
         )}
 
         {isTranslating && (
-          <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-accent-indigo)', animation: 'pulse 1.5s infinite' }}>
+          <span
+            className="font-mono"
+            style={{ fontSize: '0.75rem', color: 'var(--color-accent-indigo)', animation: 'pulse 1.5s infinite' }}
+          >
             ⏳ Đang gửi văn bản dịch thuật...
           </span>
         )}
       </div>
-
-      <hr style={{ border: 'none', borderTop: '1px solid var(--border-color)' }} />
-
-      {/* Meeting cabin segment translator controls */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-        <div className="toggle-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Layers size={16} style={{ color: 'var(--color-accent-indigo)' }} />
-            <div>
-              <p style={{ fontWeight: 500 }}>Chế độ Meeting Segment</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Tự động dịch cabin rảnh tay</p>
-            </div>
-          </div>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={cabinMode}
-              disabled={isRecording || isListening || liveMode}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setCabinMode(checked);
-                if (checked) {
-                  setRealtimeMode(false);
-                }
-              }}
-            />
-            <span className="slider"></span>
-          </label>
-        </div>
-
-        {cabinMode && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              background: 'var(--bg-input)',
-              borderRadius: '0.5rem',
-              padding: '0.5rem 0.75rem',
-              border: '1px solid var(--border-color)',
-            }}
-          >
-            <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-secondary)' }}>
-              Chu kỳ dịch thuật:
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <input
-                type="number"
-                min="5"
-                max="60"
-                value={cabinInterval}
-                onChange={(e) => setCabinInterval(Math.max(5, parseInt(e.target.value) || 5))}
-                className="input-control font-mono"
-                style={{ width: '60px', padding: '0.25rem', textAlign: 'center' }}
-              />
-              <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>giây</span>
-            </div>
-          </div>
-        )}
-
-        {/* Real-time Mode toggle row */}
-        <div className="toggle-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Layers size={16} style={{ color: 'var(--color-accent-indigo)' }} />
-            <div>
-              <p style={{ fontWeight: 500 }}>Chế độ Dịch trực tiếp (Real-time)</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>Dịch trực tiếp từ giọng nói</p>
-            </div>
-          </div>
-          <label className="switch">
-            <input
-              type="checkbox"
-              checked={realtimeMode}
-              disabled={isRecording || isListening || liveMode}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setRealtimeMode(checked);
-                if (checked) {
-                  setCabinMode(false);
-                }
-              }}
-            />
-            <span className="slider"></span>
-          </label>
-        </div>
-      </div>
     </div>
   );
 };
+
+function displayKey(code: string): string {
+  if (code === 'Space') return 'Space';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code === 'ControlLeft' || code === 'ControlRight') return 'Ctrl';
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return 'Shift';
+  if (code === 'AltLeft' || code === 'AltRight') return 'Alt';
+  return code;
+}
+
+function labelForIdle(mode: RecordingMode): string {
+  switch (mode) {
+    case 'cabin': return 'Bắt đầu thu cabin';
+    case 'realtime': return 'Bắt đầu dịch trực tiếp';
+    case 'live': return 'Bắt đầu Live Translate';
+    default: return 'Bắt đầu thu âm';
+  }
+}
+
+function labelForActive(mode: RecordingMode): string {
+  switch (mode) {
+    case 'cabin': return 'Dừng thu cabin';
+    case 'realtime': return 'Dừng dịch trực tiếp';
+    case 'live': return 'Dừng Live Translate';
+    default: return 'Dừng ghi âm';
+  }
+}

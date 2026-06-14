@@ -1,8 +1,9 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
-import { FileDown, Trash2, MessageSquareDashed } from 'lucide-react';
+import { FileDown, Trash2, MessageSquareDashed, Sparkles } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
-import { LanguageSelector } from './LanguageSelector';
+import { LanguageSelector, languages } from './LanguageSelector';
+import { ModelSelector } from './ModelSelector';
 import type { TranscriptItem } from '../hooks/useTranslator';
 
 interface TranscriptListProps {
@@ -13,12 +14,15 @@ interface TranscriptListProps {
   speakAI: (text: string, language: string, cardId: string) => Promise<void>;
   playingCardId: string | null;
   loadingCardId: string | null;
-  interimText?: string;
+  interimSource?: string;
+  interimTarget?: string;
   isTranslatingRealtime?: boolean;
   sourceLang: string;
   setSourceLang: (lang: string) => void;
   targetLang: string;
   setTargetLang: (lang: string) => void;
+  model: string;
+  onSaveModel: (model: string) => void;
 }
 
 export const TranscriptList: React.FC<TranscriptListProps> = ({
@@ -29,14 +33,20 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
   speakAI,
   playingCardId,
   loadingCardId,
-  interimText = '',
+  interimSource = '',
+  interimTarget = '',
   isTranslatingRealtime = false,
   sourceLang,
   setSourceLang,
   targetLang,
   setTargetLang,
+  model,
+  onSaveModel,
 }) => {
-  
+  const hasInterim = !!(interimSource || interimTarget);
+  const getFlag = (code: string) => languages.find((l) => l.code === code)?.label.split(' ')[0] || '🌐';
+  const getCode = (code: string) => code.split('-')[0].toUpperCase();
+
   const handleExportMarkdown = () => {
     if (transcripts.length === 0) return;
 
@@ -73,10 +83,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
     <>
       {/* Header Bar */}
       <div className="transcript-header-bar">
-        <h2>
-          Lịch sử hội thoại
-          <span className="transcript-count">{transcripts.length}</span>
-        </h2>
+        <ModelSelector model={model} onSaveModel={onSaveModel} />
 
         <div className="transcript-header-controls">
           <LanguageSelector
@@ -89,18 +96,13 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
 
           {transcripts.length > 0 && (
             <div className="transcript-actions">
-              <button className="btn btn-secondary font-mono" style={{ fontSize: '0.75rem', padding: '0.35rem 0.75rem' }} onClick={handleExportMarkdown}>
+              <button className="btn btn-secondary font-mono icon-only-btn" title="Xuất Markdown" onClick={handleExportMarkdown}>
                 <FileDown size={14} />
-                Xuất Markdown
               </button>
               <button
-                className="btn btn-secondary font-mono"
-                style={{
-                  fontSize: '0.75rem',
-                  padding: '0.35rem 0.75rem',
-                  color: '#ef4444',
-                  borderColor: 'rgba(239, 68, 68, 0.15)',
-                }}
+                className="btn btn-secondary font-mono icon-only-btn"
+                title="Xoá tất cả"
+                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.15)' }}
                 onClick={() => {
                   if (window.confirm('Bạn có chắc muốn xóa tất cả lịch sử hội thoại này không?')) {
                     onClear();
@@ -108,7 +110,6 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
                 }}
               >
                 <Trash2 size={14} />
-                Xóa hết
               </button>
             </div>
           )}
@@ -118,9 +119,9 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
       {/* Main Scroller Area */}
       <div className="transcript-scroller">
         {/* Real-time live preview card */}
-        {(interimText || isTranslatingRealtime) && (
-          <div className="transcript-card live-preview" style={{ 
-            borderColor: 'var(--color-accent-indigo)', 
+        {(hasInterim || isTranslatingRealtime) && (
+          <div className="transcript-card live-preview" style={{
+            borderColor: 'var(--color-accent-indigo)',
             borderStyle: 'dashed',
             background: 'rgba(99, 102, 241, 0.05)',
             boxShadow: '0 0 15px rgba(99, 102, 241, 0.1)',
@@ -133,21 +134,41 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
               </span>
             </div>
             <div className="card-body-grid" style={{ gridTemplateColumns: '1fr' }}>
+              {/* Source block */}
               <div className="card-content-block" style={{ background: 'transparent' }}>
-                <p className="block-text" style={{ fontStyle: 'italic', opacity: 0.9, whiteSpace: 'pre-line' }}>
-                  {interimText || 'Đang lắng nghe giọng nói của bạn...'}
-                </p>
-                {isTranslatingRealtime && (
-                  <span className="font-mono" style={{ fontSize: '0.75rem', color: 'var(--color-accent-indigo)', marginTop: '0.5rem', display: 'block' }}>
-                    ⏳ Đang dịch...
+                <div className="block-title">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>{getFlag(sourceLang)}</span>
+                    <span className="font-mono">{getCode(sourceLang)}</span>
                   </span>
-                )}
+                </div>
+                <p className="block-text" style={{ fontStyle: 'italic', opacity: 0.9, whiteSpace: 'pre-line' }}>
+                  {interimSource || 'Đang lắng nghe giọng nói của bạn...'}
+                </p>
+              </div>
+
+              {/* Target block */}
+              <div className="card-content-block" style={{ background: 'transparent', borderTop: '1px solid var(--border-color)' }}>
+                <div className="block-title">
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>{getFlag(targetLang)}</span>
+                    <span className="font-mono">{getCode(targetLang)}</span>
+                    <Sparkles size={11} style={{ color: 'var(--color-accent-teal)' }} />
+                  </span>
+                </div>
+                <p className="block-text" style={{ color: 'var(--color-text-primary)', fontWeight: 500, whiteSpace: 'pre-line' }}>
+                  {interimTarget || (
+                    <span className="font-mono" style={{ fontStyle: 'italic', opacity: 0.7, color: 'var(--color-accent-indigo)' }}>
+                      ⏳ Đang dịch...
+                    </span>
+                  )}
+                </p>
               </div>
             </div>
           </div>
         )}
 
-        {transcripts.length === 0 && !interimText && !isTranslatingRealtime ? (
+        {transcripts.length === 0 && !hasInterim && !isTranslatingRealtime ? (
           <div className="empty-state">
             <MessageSquareDashed size={48} className="empty-state-icon" />
             <h3 style={{ fontSize: '1.1rem', color: 'var(--color-text-secondary)' }}>Chưa có đoạn hội thoại nào</h3>
