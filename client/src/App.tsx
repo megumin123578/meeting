@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useTranslator } from './hooks/useTranslator';
+import { useSessions } from './hooks/useSessions';
 import { useRecorder } from './hooks/useRecorder';
 import { useEdgeTTS } from './hooks/useEdgeTTS';
 import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
@@ -8,6 +9,7 @@ import { useAuth, type AuthUser } from './hooks/useAuth';
 import { AdminPanel } from './components/AdminPanel';
 import { RecordingStation } from './components/RecordingStation';
 import { TranscriptList } from './components/TranscriptList';
+import { SessionSidebar } from './components/SessionSidebar';
 import { LoginPage } from './components/LoginPage';
 import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X } from 'lucide-react';
 
@@ -60,6 +62,21 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   };
 
   const {
+    sessions,
+    activeId,
+    transcripts,
+    loading: sessionsLoading,
+    ensureActiveSession,
+    createSession,
+    selectSession,
+    renameSession,
+    deleteSession,
+    addTranscriptItem,
+    deleteTranscript,
+    clearActiveSession,
+  } = useSessions({ token, userId: user.id, onShowToast: showToast });
+
+  const {
     apiKey,
     saveApiKey,
     isKeyValid,
@@ -68,15 +85,11 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     ttsStatus,
     checkEdgeTTS,
     isTranslating,
-    transcripts,
     translateAudio,
-    deleteTranscript,
-    clearTranscripts,
     translateText,
-    addTranscriptItem,
     model,
     saveModel,
-  } = useTranslator({ onShowToast: showToast, token, userId: user.id });
+  } = useTranslator({ onShowToast: showToast, token, onTranscript: addTranscriptItem });
 
   const {
     loadingCardId,
@@ -90,7 +103,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     isRecording,
     startRecording,
     stopRecording,
-    cabinMode,
     setCabinMode,
     cabinInterval,
     setCabinInterval,
@@ -115,7 +127,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   });
 
   const {
-    realtimeMode,
     setRealtimeMode,
     isListening,
     startListening,
@@ -194,6 +205,21 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     }
   }, [isLive]);
 
+  const handleStart = async () => {
+    const sessionId = await ensureActiveSession();
+    if (!sessionId) return;
+
+    if (mode === 'live') {
+      await startLive();
+      return;
+    }
+    if (mode === 'realtime') {
+      startListening();
+      return;
+    }
+    await startRecording(sourceLang);
+  };
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -253,13 +279,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
                 ? isListening
                 : isRecording
             }
-            onStart={
-              mode === 'live'
-                ? () => void startLive()
-                : mode === 'realtime'
-                ? startListening
-                : () => startRecording(sourceLang)
-            }
+            onStart={() => void handleStart()}
             onStop={
               mode === 'live'
                 ? stopLive
@@ -275,24 +295,35 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
         </div>
 
         <div className="content-col">
-          <TranscriptList
-            transcripts={transcripts}
-            onDelete={deleteTranscript}
-            onClear={clearTranscripts}
-            speakOriginal={speakOriginal}
-            speakAI={speakAI}
-            playingCardId={playingCardId}
-            loadingCardId={loadingCardId}
-            interimSource={mode === 'live' ? interimSource : interimText}
-            interimTarget={mode === 'live' ? interimTarget : ''}
-            isTranslatingRealtime={mode === 'live' ? isLive : isTranslatingRealtime}
-            sourceLang={sourceLang}
-            setSourceLang={setSourceLang}
-            targetLang={targetLang}
-            setTargetLang={setTargetLang}
-            model={model}
-            onSaveModel={saveModel}
+          <SessionSidebar
+            sessions={sessions}
+            activeId={activeId}
+            onSelect={selectSession}
+            onCreate={createSession}
+            onRename={renameSession}
+            onDelete={deleteSession}
           />
+          <div className="transcript-panel">
+            <TranscriptList
+              transcripts={transcripts}
+              loading={sessionsLoading}
+              onDelete={deleteTranscript}
+              onClear={clearActiveSession}
+              speakOriginal={speakOriginal}
+              speakAI={speakAI}
+              playingCardId={playingCardId}
+              loadingCardId={loadingCardId}
+              interimSource={mode === 'live' ? interimSource : interimText}
+              interimTarget={mode === 'live' ? interimTarget : ''}
+              isTranslatingRealtime={mode === 'live' ? isLive : isTranslatingRealtime}
+              sourceLang={sourceLang}
+              setSourceLang={setSourceLang}
+              targetLang={targetLang}
+              setTargetLang={setTargetLang}
+              model={model}
+              onSaveModel={saveModel}
+            />
+          </div>
         </div>
       </div>
 

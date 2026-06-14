@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
-import { FileDown, Trash2, MessageSquareDashed, Sparkles } from 'lucide-react';
+import { FileDown, Trash2, MessageSquareDashed, Sparkles, Loader2 } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
 import { LanguageSelector, languages } from './LanguageSelector';
 import { ModelSelector } from './ModelSelector';
@@ -17,6 +17,7 @@ interface TranscriptListProps {
   interimSource?: string;
   interimTarget?: string;
   isTranslatingRealtime?: boolean;
+  loading?: boolean;
   sourceLang: string;
   setSourceLang: (lang: string) => void;
   targetLang: string;
@@ -36,6 +37,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
   interimSource = '',
   interimTarget = '',
   isTranslatingRealtime = false,
+  loading = false,
   sourceLang,
   setSourceLang,
   targetLang,
@@ -168,7 +170,12 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
           </div>
         )}
 
-        {transcripts.length === 0 && !hasInterim && !isTranslatingRealtime ? (
+        {loading && transcripts.length === 0 ? (
+          <div className="empty-state">
+            <Loader2 size={32} className="animate-spin empty-state-icon" />
+            <p style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Đang tải nội dung phiên...</p>
+          </div>
+        ) : transcripts.length === 0 && !hasInterim && !isTranslatingRealtime ? (
           <div className="empty-state">
             <MessageSquareDashed size={48} className="empty-state-icon" />
             <h3 style={{ fontSize: '1.1rem', color: 'var(--color-text-secondary)' }}>Chưa có đoạn hội thoại nào</h3>

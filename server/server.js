@@ -10,6 +10,7 @@ const ttsRoute = require('./routes/tts');
 const translateTextRoute = require('./routes/translateText');
 const authRoute = require('./routes/auth');
 const userConfigRoute = require('./routes/userConfig');
+const sessionsRoute = require('./routes/sessions');
 const { attachLiveTranslate } = require('./routes/liveTranslate');
 
 const app = express();
@@ -31,6 +32,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 // API Endpoints
 app.use('/api', authRoute);
 app.use('/api', userConfigRoute);
+app.use('/api', sessionsRoute);
 app.use('/api', testKeyRoute);
 app.use('/api', translateAudioRoute);
 app.use('/api', ttsRoute);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 export interface TranscriptItem {
   id: string;
@@ -12,43 +12,24 @@ export interface TranscriptItem {
 interface UseTranslatorProps {
   onShowToast: (message: string) => void;
   token: string | null;
-  userId: string | null;
+  /** Called when a translation produces a new transcript (owned by useSessions). */
+  onTranscript: (
+    originalText: string,
+    translatedText: string,
+    sourceLang: string,
+    targetLang: string
+  ) => void;
 }
 
 const DEFAULT_MODEL = (import.meta as any).env?.VITE_DEFAULT_MODEL || 'gemini-2.5-flash';
 
-const transcriptsKey = (userId: string | null) =>
-  userId ? `translator_transcripts_${userId}` : 'translator_transcripts_guest';
-
-export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps) => {
+export const useTranslator = ({ onShowToast, token, onTranscript }: UseTranslatorProps) => {
   const [apiKey, setApiKey] = useState<string>('');
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
   const [isKeyValid, setIsKeyValid] = useState<'valid' | 'invalid' | 'unchecked' | 'checking'>('unchecked');
   const [keyError, setKeyError] = useState<string>('');
   const [ttsStatus, setTtsStatus] = useState<'ready' | 'error' | 'checking' | 'unconfigured'>('unconfigured');
   const [isTranslating, setIsTranslating] = useState(false);
-  const [transcripts, setTranscripts] = useState<TranscriptItem[]>(() => {
-    const saved = localStorage.getItem(transcriptsKey(userId));
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  // Track current user to gate persistence (avoid writing during user-switch flicker)
-  const userIdRef = useRef(userId);
-  useEffect(() => {
-    userIdRef.current = userId;
-  }, [userId]);
-
-  // Load transcripts when user changes
-  useEffect(() => {
-    const saved = localStorage.getItem(transcriptsKey(userId));
-    setTranscripts(saved ? JSON.parse(saved) : []);
-  }, [userId]);
-
-  // Persist transcripts (scoped per user)
-  useEffect(() => {
-    if (userIdRef.current !== userId) return;
-    localStorage.setItem(transcriptsKey(userId), JSON.stringify(transcripts));
-  }, [transcripts, userId]);
 
   // Load API key + model from server when user logs in
   useEffect(() => {
@@ -215,16 +196,7 @@ export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps
 
       const data = await response.json();
 
-      const newTranscript: TranscriptItem = {
-        id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        originalText: data.originalText,
-        translatedText: data.translatedText,
-        sourceLang,
-        targetLang,
-      };
-
-      setTranscripts((prev) => [newTranscript, ...prev]);
+      onTranscript(data.originalText, data.translatedText, sourceLang, targetLang);
     } catch (err: any) {
       console.error('Translation process error:', err);
       onShowToast(`❌ Lỗi: ${err.message || 'Không kết nối được tới server'}`);
@@ -273,31 +245,6 @@ export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps
     }
   };
 
-  const addTranscriptItem = (
-    originalText: string,
-    translatedText: string,
-    sourceLang: string,
-    targetLang: string
-  ) => {
-    const newTranscript: TranscriptItem = {
-      id: `card_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      timestamp: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      originalText,
-      translatedText,
-      sourceLang,
-      targetLang,
-    };
-    setTranscripts((prev) => [newTranscript, ...prev]);
-  };
-
-  const deleteTranscript = (id: string) => {
-    setTranscripts((prev) => prev.filter((item) => item.id !== id));
-  };
-
-  const clearTranscripts = () => {
-    setTranscripts([]);
-  };
-
   return {
     apiKey,
     saveApiKey,
@@ -307,12 +254,8 @@ export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps
     ttsStatus,
     checkEdgeTTS,
     isTranslating,
-    transcripts,
     translateAudio,
-    deleteTranscript,
-    clearTranscripts,
     translateText,
-    addTranscriptItem,
     model,
     saveModel,
   };
