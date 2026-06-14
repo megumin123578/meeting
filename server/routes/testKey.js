@@ -4,11 +4,16 @@ const { logError } = require('../utils/logger');
 
 router.get('/test-key', async (req, res) => {
   const apiKey = req.headers['x-gemini-api-key'];
-  const model = (req.query.model || process.env.DEFAULT_MODEL || 'gemini-2.5-flash').toString().trim();
+  const requestedModel = (req.query.model || process.env.DEFAULT_MODEL || 'gemini-2.5-flash').toString().trim();
 
   if (!apiKey) {
     return res.status(400).json({ ok: false, message: 'Missing API Key in request headers.' });
   }
+
+  // Live models don't support REST generateContent — use a regular model just to validate
+  // that the API key itself is valid. The Live API session will perform its own auth.
+  const isLive = /live/i.test(requestedModel);
+  const model = isLive ? 'gemini-2.5-flash' : requestedModel;
 
   try {
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
@@ -20,7 +25,12 @@ router.get('/test-key', async (req, res) => {
     });
 
     if (response.ok) {
-      return res.json({ ok: true, message: 'Gemini API Key is valid and active.' });
+      return res.json({
+        ok: true,
+        message: isLive
+          ? `Gemini API Key hợp lệ. (Đã test bằng ${model} vì model live không hỗ trợ REST validate.)`
+          : 'Gemini API Key is valid and active.',
+      });
     }
 
     const errData = await response.json().catch(() => ({}));

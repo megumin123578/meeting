@@ -134,7 +134,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
             </div>
             <div className="card-body-grid" style={{ gridTemplateColumns: '1fr' }}>
               <div className="card-content-block" style={{ background: 'transparent' }}>
-                <p className="block-text" style={{ fontStyle: 'italic', opacity: 0.9 }}>
+                <p className="block-text" style={{ fontStyle: 'italic', opacity: 0.9, whiteSpace: 'pre-line' }}>
                   {interimText || 'Đang lắng nghe giọng nói của bạn...'}
                 </p>
                 {isTranslatingRealtime && (

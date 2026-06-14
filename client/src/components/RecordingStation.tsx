@@ -17,6 +17,7 @@ interface RecordingStationProps {
   isListening: boolean;
   startListening: () => void;
   stopListening: () => void;
+  liveMode?: boolean;
 }
 
 export const RecordingStation: React.FC<RecordingStationProps> = ({
@@ -34,6 +35,7 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
   isListening,
   startListening,
   stopListening,
+  liveMode = false,
 }) => {
   const [recordMode, setRecordMode] = useState<'toggle' | 'ptt'>('toggle');
   const isPttActiveRef = useRef(false);
@@ -71,11 +73,11 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <h2 style={{ fontSize: '1.1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Mic size={18} className="logo-icon" />
-          Recording Station
+          {liveMode ? 'Live Translate' : 'Recording Station'}
         </h2>
         
         {/* Toggle / PTT selector tabs */}
-        {!realtimeMode && (
+        {!realtimeMode && !liveMode && (
           <div
             style={{
               display: 'flex',
@@ -132,7 +134,34 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
 
       {/* Recording controls */}
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
-        {realtimeMode ? (
+        {liveMode ? (
+          <button
+            className={`btn ${isRecording ? 'btn-secondary' : 'btn-primary'}`}
+            style={{
+              width: '100%',
+              height: '48px',
+              fontWeight: 'bold',
+              background: isRecording ? 'rgba(239, 68, 68, 0.2)' : undefined,
+              borderColor: isRecording ? 'rgba(239, 68, 68, 0.4)' : undefined,
+              color: isRecording ? '#ef4444' : undefined,
+              boxShadow: isRecording ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
+            }}
+            onClick={isRecording ? stopRecording : startRecording}
+            disabled={isTranslating}
+          >
+            {isRecording ? (
+              <>
+                <Square size={18} fill="currentColor" />
+                Dừng Live Translate
+              </>
+            ) : (
+              <>
+                <Mic size={18} />
+                Bắt đầu Live Translate
+              </>
+            )}
+          </button>
+        ) : realtimeMode ? (
           <button
             className={`btn ${isListening ? 'btn-secondary' : 'btn-primary'}`}
             style={{
@@ -230,7 +259,7 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
             <input
               type="checkbox"
               checked={cabinMode}
-              disabled={isRecording || isListening}
+              disabled={isRecording || isListening || liveMode}
               onChange={(e) => {
                 const checked = e.target.checked;
                 setCabinMode(checked);
@@ -286,7 +315,7 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
             <input
               type="checkbox"
               checked={realtimeMode}
-              disabled={isRecording || isListening}
+              disabled={isRecording || isListening || liveMode}
               onChange={(e) => {
                 const checked = e.target.checked;
                 setRealtimeMode(checked);

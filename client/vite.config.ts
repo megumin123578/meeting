@@ -43,6 +43,11 @@ export default defineConfig(({ mode }) => {
             })
           },
         },
+        '/ws': {
+          target: apiOrigin.replace(/^http/, 'ws'),
+          ws: true,
+          changeOrigin: true,
+        },
       },
       allowedHosts,
     },

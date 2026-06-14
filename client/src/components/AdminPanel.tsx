@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Key, ChevronDown, ChevronUp, Activity, RefreshCw } from 'lucide-react';
 
@@ -31,11 +31,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const modelOptions = [
     { value: 'gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'gemini-3.5-live-translate-preview', label: 'Gemini 3.5 Live Translate' },
   ];
 
   const isPreset = modelOptions.some(opt => opt.value === model);
   const [isCustomMode, setIsCustomMode] = useState(!isPreset);
   const [customModelText, setCustomModelText] = useState(isPreset ? '' : model);
+
+  // Sync local state when parent loads config from server asynchronously.
+  useEffect(() => {
+    setLocalKey(apiKey);
+  }, [apiKey]);
+
+  useEffect(() => {
+    const matches = modelOptions.some((opt) => opt.value === model);
+    setIsCustomMode(!matches);
+    setCustomModelText(matches ? '' : model);
+    // modelOptions is constructed inline so we only depend on `model`
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model]);
 
   const handleSave = () => {
     onSaveKey(localKey);
@@ -132,31 +146,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 </div>
               )}
 
-              <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleTest}
-                  disabled={testing}
-                  style={{ flex: 1, minWidth: '160px' }}
-                >
-                  {testing ? (
-                    <RefreshCw size={16} className="animate-spin" />
-                  ) : (
-                    <Activity size={16} />
-                  )}
-                  Kiểm tra kết nối
-                </button>
-                
-                <button
-                  className="btn btn-secondary"
-                  onClick={onCheckTTS}
-                  disabled={ttsStatus === 'checking'}
-                  title="Kiểm tra lại trạng thái Edge TTS"
-                  style={{ width: '40px', padding: 0 }}
-                >
-                  <RefreshCw size={16} className={ttsStatus === 'checking' ? 'animate-spin' : ''} />
-                </button>
-              </div>
+              <button
+                className="btn btn-primary"
+                onClick={handleTest}
+                disabled={testing}
+                style={{ width: '100%' }}
+              >
+                {testing ? (
+                  <RefreshCw size={16} className="animate-spin" />
+                ) : (
+                  <Activity size={16} />
+                )}
+                Kiểm tra kết nối
+              </button>
 
               {/* Status Badges Section */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', marginTop: '0.5rem' }}>

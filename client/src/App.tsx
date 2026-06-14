@@ -3,6 +3,7 @@ import { useTranslator } from './hooks/useTranslator';
 import { useRecorder } from './hooks/useRecorder';
 import { useEdgeTTS } from './hooks/useEdgeTTS';
 import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
+import { useLiveTranslate } from './hooks/useLiveTranslate';
 import { useAuth, type AuthUser } from './hooks/useAuth';
 import { AdminPanel } from './components/AdminPanel';
 import { RecordingStation } from './components/RecordingStation';
@@ -117,21 +118,52 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     onShowToast: showToast,
   });
 
+  // Live API mode (audio<->audio streaming via Google Live API)
+  const isLiveMode = /live/i.test(model);
+  const {
+    isLive,
+    startLive,
+    stopLive,
+    interimSource,
+    interimTarget,
+    analyser: liveAnalyser,
+  } = useLiveTranslate({
+    token,
+    sourceLang,
+    targetLang,
+    model,
+    onTurnComplete: addTranscriptItem,
+    onShowToast: showToast,
+  });
+
   useEffect(() => {
     if (isRecording) {
       stopSpeaking();
       stopListening();
+      stopLive();
     }
   }, [isRecording]);
 
   useEffect(() => {
     if (isListening) {
       stopSpeaking();
-      if (isRecording) {
-        stopRecording();
-      }
+      if (isRecording) stopRecording();
+      stopLive();
     }
   }, [isListening]);
+
+  useEffect(() => {
+    if (isLive) {
+      stopSpeaking();
+      if (isRecording) stopRecording();
+      stopListening();
+    }
+  }, [isLive]);
+
+  // If user switches away from a live model while a session is active, end the session
+  useEffect(() => {
+    if (!isLiveMode && isLive) stopLive();
+  }, [isLiveMode, isLive, stopLive]);
 
   return (
     <div className="app-container">
@@ -179,20 +211,21 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
           />
 
           <RecordingStation
-            isRecording={isRecording}
-            startRecording={() => startRecording(sourceLang)}
-            stopRecording={stopRecording}
+            isRecording={isLiveMode ? isLive : isRecording}
+            startRecording={isLiveMode ? () => void startLive() : () => startRecording(sourceLang)}
+            stopRecording={isLiveMode ? stopLive : stopRecording}
             cabinMode={cabinMode}
             setCabinMode={setCabinMode}
             cabinInterval={cabinInterval}
             setCabinInterval={setCabinInterval}
-            analyser={analyser}
+            analyser={isLiveMode ? liveAnalyser : analyser}
             isTranslating={isTranslating}
             realtimeMode={realtimeMode}
             setRealtimeMode={setRealtimeMode}
             isListening={isListening}
             startListening={startListening}
             stopListening={stopListening}
+            liveMode={isLiveMode}
           />
         </div>
 
@@ -205,8 +238,12 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
             speakAI={speakAI}
             playingCardId={playingCardId}
             loadingCardId={loadingCardId}
-            interimText={interimText}
-            isTranslatingRealtime={isTranslatingRealtime}
+            interimText={
+              isLiveMode
+                ? [interimSource, interimTarget].filter(Boolean).join('\n→ ')
+                : interimText
+            }
+            isTranslatingRealtime={isLiveMode ? isLive : isTranslatingRealtime}
             sourceLang={sourceLang}
             setSourceLang={setSourceLang}
             targetLang={targetLang}

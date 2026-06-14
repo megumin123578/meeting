@@ -1,4 +1,5 @@
 const express = require('express');
+const http = require('http');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
@@ -9,6 +10,7 @@ const ttsRoute = require('./routes/tts');
 const translateTextRoute = require('./routes/translateText');
 const authRoute = require('./routes/auth');
 const userConfigRoute = require('./routes/userConfig');
+const { attachLiveTranslate } = require('./routes/liveTranslate');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,9 +45,13 @@ app.get('*', (req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
 });
 
-// Start listening
-app.listen(PORT, () => {
+// Start listening (use raw http.Server so we can attach WebSocket upgrade handler)
+const server = http.createServer(app);
+attachLiveTranslate(server);
+
+server.listen(PORT, () => {
   console.log(`=========================================`);
   console.log(`  URL: http://localhost:${PORT}          `);
+  console.log(`  WS:  ws://localhost:${PORT}/ws/live-translate`);
   console.log(`=========================================`);
 });

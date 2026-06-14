@@ -65,7 +65,10 @@ export const useTranslator = ({ onShowToast, token, userId }: UseTranslatorProps
         const res = await fetch('/api/user/config', {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          console.warn('Load user config failed:', res.status, await res.text().catch(() => ''));
+          return;
+        }
         const data = await res.json();
         if (cancelled) return;
         setApiKey(data.apiKey || '');
