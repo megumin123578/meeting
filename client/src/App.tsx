@@ -401,7 +401,6 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   isKeyValid,
   keyError,
   onCheckKey,
-  ttsStatus,
   onCheckTTS,
   model,
   inputStyle,

@@ -337,9 +337,26 @@ export const useLiveTranslate = ({
     }
   }, [token, sourceLang, targetLang, model, isLive, handleServerMessage, cleanup, onShowToast]);
 
+  // Save whatever has accumulated in the current (not-yet-completed) turn.
+  // Without this, stopping mid-utterance — or a model that never sends an
+  // explicit turnComplete — would discard the spoken segment unsaved.
+  const flushTurn = useCallback(() => {
+    const original = turnSourceRef.current.trim();
+    const translated = turnTargetRef.current.trim();
+    turnSourceRef.current = '';
+    turnTargetRef.current = '';
+    setInterimSource('');
+    setInterimTarget('');
+    if (original || translated) {
+      const { source, target } = turnLangsRef.current;
+      onTurnComplete(original, translated, source, target);
+    }
+  }, [onTurnComplete]);
+
   const stopLive = useCallback(() => {
+    flushTurn();
     cleanup();
-  }, [cleanup]);
+  }, [flushTurn, cleanup]);
 
   return {
     isLive,
