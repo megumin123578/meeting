@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Plus, Check, X, Pencil, Trash2, Download } from 'lucide-react';
 import type { SessionMeta } from '../hooks/useSessions';
 import { EXPORT_FORMATS, type ExportFormat } from '../utils/exportTranscripts';
+import { useConfirm } from './ConfirmDialog';
 
 interface SessionSidebarProps {
   sessions: SessionMeta[];
@@ -26,6 +27,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [exportId, setExportId] = useState<string | null>(null);
+  const confirm = useConfirm();
 
   // Close the export menu on any outside click / Escape.
   useEffect(() => {
@@ -143,11 +145,15 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                           <button
                             className="session-icon-btn session-icon-danger"
                             title="Xoá phiên"
-                            onClick={(e) => {
+                            onClick={async (e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Xoá phiên "${s.title}" và toàn bộ nội dung của nó?`)) {
-                                onDelete(s.id);
-                              }
+                              const ok = await confirm({
+                                title: 'Xoá phiên',
+                                message: `Xoá phiên "${s.title}" và toàn bộ nội dung?`,
+                                confirmText: 'Xoá',
+                                danger: true,
+                              });
+                              if (ok) onDelete(s.id);
                             }}
                           >
                             <Trash2 size={13} />

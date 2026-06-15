@@ -11,6 +11,7 @@ import { RecordButton } from './components/RecordButton';
 import { WaveAnimation } from './components/WaveAnimation';
 import { TranscriptList } from './components/TranscriptList';
 import { SessionSidebar } from './components/SessionSidebar';
+import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw } from 'lucide-react';
 
@@ -77,7 +78,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     deleteSession,
     addTranscriptItem,
     deleteTranscript,
-    clearActiveSession,
     exportSession,
   } = useSessions({ token, userId: user.id, onShowToast: showToast });
 
@@ -245,6 +245,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
 
   return (
+    <ConfirmProvider>
     <div className="app-container">
       <header className="app-header">
         <div className="app-title-section">
@@ -324,7 +325,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               transcripts={transcripts}
               loading={sessionsLoading}
               onDelete={deleteTranscript}
-              onClear={clearActiveSession}
               speakOriginal={speakOriginal}
               speakAI={speakAI}
               playingCardId={playingCardId}
@@ -363,6 +363,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
         </div>
       )}
     </div>
+    </ConfirmProvider>
   );
 };
 

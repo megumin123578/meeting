@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
-import { FileDown, Trash2, MessageSquareDashed, Sparkles, Loader2 } from 'lucide-react';
+import { FileDown, MessageSquareDashed, Sparkles, Loader2 } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
 import { LanguageSelector, languages } from './LanguageSelector';
 import { ModelSelector } from './ModelSelector';
@@ -9,7 +9,6 @@ import type { TranscriptItem } from '../hooks/useTranslator';
 interface TranscriptListProps {
   transcripts: TranscriptItem[];
   onDelete: (id: string) => void;
-  onClear: () => void;
   speakOriginal: (text: string, language: string, cardId: string) => Promise<void>;
   speakAI: (text: string, language: string, cardId: string) => Promise<void>;
   playingCardId: string | null;
@@ -29,7 +28,6 @@ interface TranscriptListProps {
 export const TranscriptList: React.FC<TranscriptListProps> = ({
   transcripts,
   onDelete,
-  onClear,
   speakOriginal,
   speakAI,
   playingCardId,
@@ -100,18 +98,6 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
             <div className="transcript-actions">
               <button className="btn btn-secondary font-mono icon-only-btn" title="Xuất Markdown" onClick={handleExportMarkdown}>
                 <FileDown size={14} />
-              </button>
-              <button
-                className="btn btn-secondary font-mono icon-only-btn"
-                title="Xoá tất cả"
-                style={{ color: '#ef4444', borderColor: 'rgba(239, 68, 68, 0.15)' }}
-                onClick={() => {
-                  if (window.confirm('Bạn có chắc muốn xóa tất cả lịch sử hội thoại này không?')) {
-                    onClear();
-                  }
-                }}
-              >
-                <Trash2 size={14} />
               </button>
             </div>
           )}
