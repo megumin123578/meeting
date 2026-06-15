@@ -1,5 +1,5 @@
-import React from 'react';
-import { ArrowLeftRight, Globe } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowLeftRight, Globe, ChevronDown, Search, Check } from 'lucide-react';
 
 interface LanguageSelectorProps {
   sourceLang: string;
@@ -21,8 +21,97 @@ export const languages = [
   { code: 'de-DE', label: '🇩🇪 Deutsch' }
 ];
 
-const dropdownBg =
-  'var(--bg-input) url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'24\' height=\'24\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2394a3b8\' stroke-width=\'2\' stroke-linecap=\'round\' stroke-linejoin=\'round\'%3E%3Cpolyline points=\'6 9 12 15 18 9\'%3E%3C/polyline%3E%3C/svg%3E") no-repeat right 0.75rem center';
+interface LangDropdownProps {
+  value: string;
+  onChange: (code: string) => void;
+  ariaLabel: string;
+  compact?: boolean;
+}
+
+const LangDropdown: React.FC<LangDropdownProps> = ({ value, onChange, ariaLabel, compact }) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const ref = useRef<HTMLDivElement>(null);
+
+  const selected = languages.find((l) => l.code === value);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = q
+    ? languages.filter((l) => l.label.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+    : languages;
+
+  const choose = (code: string) => {
+    onChange(code);
+    setOpen(false);
+    setQuery('');
+  };
+
+  return (
+    <div className={`lang-dd ${compact ? 'lang-dd-compact' : ''}`} ref={ref}>
+      <button
+        type="button"
+        className="lang-dd-trigger"
+        onClick={() => setOpen((o) => !o)}
+        aria-label={ariaLabel}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+      >
+        <span className="lang-dd-value">{selected ? selected.label : 'Chọn ngôn ngữ'}</span>
+        <ChevronDown size={14} className={`lang-dd-caret ${open ? 'open' : ''}`} />
+      </button>
+
+      {open && (
+        <div className="lang-dd-menu" role="listbox">
+          <div className="lang-dd-search">
+            <Search size={13} />
+            <input
+              autoFocus
+              className="lang-dd-search-input"
+              placeholder="Tìm ngôn ngữ..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
+          <div className="lang-dd-list">
+            {filtered.length === 0 ? (
+              <div className="lang-dd-empty">Không tìm thấy ngôn ngữ</div>
+            ) : (
+              filtered.map((l) => (
+                <button
+                  key={l.code}
+                  type="button"
+                  role="option"
+                  aria-selected={l.code === value}
+                  className={`lang-dd-option ${l.code === value ? 'active' : ''}`}
+                  onClick={() => choose(l.code)}
+                >
+                  <span>{l.label}</span>
+                  {l.code === value && <Check size={13} />}
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   sourceLang,
@@ -40,37 +129,13 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
   if (compact) {
     return (
       <div className="lang-selector-compact">
-        <select
-          value={sourceLang}
-          onChange={(e) => setSourceLang(e.target.value)}
-          className="input-control font-mono lang-select-compact"
-          style={{ appearance: 'none', background: dropdownBg, backgroundSize: '1rem' }}
-          aria-label="Ngôn ngữ nguồn"
-        >
-          {languages.map((lang) => (
-            <option key={`src-${lang.code}`} value={lang.code}>
-              {lang.label}
-            </option>
-          ))}
-        </select>
+        <LangDropdown value={sourceLang} onChange={setSourceLang} ariaLabel="Ngôn ngữ nguồn" compact />
 
         <button className="swap-btn swap-btn-compact" onClick={swapLanguages} title="Đảo ngược hai ngôn ngữ">
           <ArrowLeftRight size={12} />
         </button>
 
-        <select
-          value={targetLang}
-          onChange={(e) => setTargetLang(e.target.value)}
-          className="input-control font-mono lang-select-compact"
-          style={{ appearance: 'none', background: dropdownBg, backgroundSize: '1rem' }}
-          aria-label="Ngôn ngữ đích"
-        >
-          {languages.map((lang) => (
-            <option key={`dest-${lang.code}`} value={lang.code}>
-              {lang.label}
-            </option>
-          ))}
-        </select>
+        <LangDropdown value={targetLang} onChange={setTargetLang} ariaLabel="Ngôn ngữ đích" compact />
       </div>
     );
   }
@@ -85,18 +150,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
       <div className="lang-selector-grid">
         <div className="input-group">
           <label className="input-label">Ngôn ngữ nguồn</label>
-          <select
-            value={sourceLang}
-            onChange={(e) => setSourceLang(e.target.value)}
-            className="input-control font-mono"
-            style={{ appearance: 'none', background: dropdownBg, backgroundSize: '1.25rem' }}
-          >
-            {languages.map((lang) => (
-              <option key={`src-${lang.code}`} value={lang.code}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
+          <LangDropdown value={sourceLang} onChange={setSourceLang} ariaLabel="Ngôn ngữ nguồn" />
         </div>
 
         <button className="swap-btn" onClick={swapLanguages} title="Đảo ngược hai ngôn ngữ">
@@ -105,18 +159,7 @@ export const LanguageSelector: React.FC<LanguageSelectorProps> = ({
 
         <div className="input-group">
           <label className="input-label">Ngôn ngữ đích</label>
-          <select
-            value={targetLang}
-            onChange={(e) => setTargetLang(e.target.value)}
-            className="input-control font-mono"
-            style={{ appearance: 'none', background: dropdownBg, backgroundSize: '1.25rem' }}
-          >
-            {languages.map((lang) => (
-              <option key={`dest-${lang.code}`} value={lang.code}>
-                {lang.label}
-              </option>
-            ))}
-          </select>
+          <LangDropdown value={targetLang} onChange={setTargetLang} ariaLabel="Ngôn ngữ đích" />
         </div>
       </div>
     </div>

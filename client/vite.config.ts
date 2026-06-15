@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, process.cwd(), ''), ...process.env }
   const apiPort = env.VITE_API_PORT || env.PORT || '3001'
   const apiOrigin = env.VITE_API_ORIGIN || `http://localhost:${apiPort}`
-  const allowedHosts = (env.VITE_ALLOWED_HOSTS || 'meeting.n8nfmc.io.vn')
+  const allowedHosts = (env.VITE_ALLOWED_HOSTS || 'meeting.n8nfmc.io.vn,meeting.yumnetwork.vn')
     .split(',')
     .map((host) => host.trim())
     .filter(Boolean)
