@@ -10,16 +10,27 @@ interface LanguageSelectorProps {
 }
 
 export const languages = [
-  { code: 'vi-VN', label: '🇻🇳 Tiếng Việt' },
-  { code: 'en-US', label: '🇺🇸 English (US)' },
-  { code: 'en-GB', label: '🇬🇧 English (UK)' },
-  { code: 'zh-CN', label: '🇨🇳 中文 (简体)' },
-  { code: 'ja-JP', label: '🇯🇵 日本語' },
-  { code: 'ko-KR', label: '🇰🇷 한국어' },
-  { code: 'ms-MY', label: '🇲🇾 Bahasa Melayu' },
-  { code: 'fr-FR', label: '🇫🇷 Français' },
-  { code: 'de-DE', label: '🇩🇪 Deutsch' }
+  { code: 'vi-VN', country: 'vn', name: 'Tiếng Việt' },
+  { code: 'en-US', country: 'us', name: 'English (US)' },
+  { code: 'en-GB', country: 'gb', name: 'English (UK)' },
+  { code: 'zh-CN', country: 'cn', name: '中文 (简体)' },
+  { code: 'ja-JP', country: 'jp', name: '日本語' },
+  { code: 'ko-KR', country: 'kr', name: '한국어' },
+  { code: 'ms-MY', country: 'my', name: 'Bahasa Melayu' },
+  { code: 'fr-FR', country: 'fr', name: 'Français' },
+  { code: 'de-DE', country: 'de', name: 'Deutsch' }
 ];
+
+export const getLanguageName = (code: string) =>
+  languages.find((l) => l.code === code)?.name ?? code;
+
+// SVG flag (flag-icons) — renders identically across all browsers/OSes,
+// unlike emoji flags which Chrome on Windows cannot draw.
+export const Flag: React.FC<{ code: string; className?: string }> = ({ code, className }) => {
+  const country = languages.find((l) => l.code === code)?.country;
+  if (!country) return <Globe size={14} aria-hidden="true" />;
+  return <span className={`fi fi-${country} lang-flag${className ? ` ${className}` : ''}`} aria-hidden="true" />;
+};
 
 interface LangDropdownProps {
   value: string;
@@ -53,7 +64,7 @@ const LangDropdown: React.FC<LangDropdownProps> = ({ value, onChange, ariaLabel,
 
   const q = query.trim().toLowerCase();
   const filtered = q
-    ? languages.filter((l) => l.label.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
+    ? languages.filter((l) => l.name.toLowerCase().includes(q) || l.code.toLowerCase().includes(q))
     : languages;
 
   const choose = (code: string) => {
@@ -72,7 +83,15 @@ const LangDropdown: React.FC<LangDropdownProps> = ({ value, onChange, ariaLabel,
         aria-haspopup="listbox"
         aria-expanded={open}
       >
-        <span className="lang-dd-value">{selected ? selected.label : 'Chọn ngôn ngữ'}</span>
+        <span className="lang-dd-value">
+          {selected ? (
+            <>
+              <Flag code={selected.code} /> {selected.name}
+            </>
+          ) : (
+            'Chọn ngôn ngữ'
+          )}
+        </span>
         <ChevronDown size={14} className={`lang-dd-caret ${open ? 'open' : ''}`} />
       </button>
 
@@ -101,7 +120,9 @@ const LangDropdown: React.FC<LangDropdownProps> = ({ value, onChange, ariaLabel,
                   className={`lang-dd-option ${l.code === value ? 'active' : ''}`}
                   onClick={() => choose(l.code)}
                 >
-                  <span>{l.label}</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Flag code={l.code} /> {l.name}
+                  </span>
                   {l.code === value && <Check size={13} />}
                 </button>
               ))

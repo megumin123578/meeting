@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { Volume2, Copy, Check, Trash2, Loader2, Sparkles } from 'lucide-react';
 import type { TranscriptItem } from '../hooks/useTranslator';
-import { languages } from './LanguageSelector';
+import { Flag, getLanguageName } from './LanguageSelector';
 
 interface TranscriptCardProps {
   item: TranscriptItem;
@@ -23,11 +23,6 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
 }) => {
   const [copiedOriginal, setCopiedOriginal] = useState(false);
   const [copiedTranslated, setCopiedTranslated] = useState(false);
-
-  // Helper to get labels
-  const getLangLabel = (code: string) => {
-    return languages.find((l) => l.code === code)?.label || code;
-  };
 
   const handleCopyOriginal = async () => {
     try {
@@ -65,7 +60,7 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
       {/* Top Meta Bar */}
       <div className="card-meta-bar">
         <span className="card-langs font-mono">
-          {getLangLabel(item.sourceLang)} ➡️ {getLangLabel(item.targetLang)}
+          <Flag code={item.sourceLang} /> {getLanguageName(item.sourceLang)} ➡️ <Flag code={item.targetLang} /> {getLanguageName(item.targetLang)}
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span>{item.timestamp}</span>

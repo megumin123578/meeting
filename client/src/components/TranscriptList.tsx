@@ -2,7 +2,7 @@ import React from 'react';
 import { AnimatePresence } from 'motion/react';
 import { FileDown, MessageSquareDashed, Sparkles, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
-import { LanguageSelector, languages } from './LanguageSelector';
+import { LanguageSelector, Flag } from './LanguageSelector';
 import { ModelSelector } from './ModelSelector';
 import type { TranscriptItem } from '../hooks/useTranslator';
 
@@ -50,7 +50,6 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
   onToggleVoice,
 }) => {
   const hasInterim = !!(interimSource || interimTarget);
-  const getFlag = (code: string) => languages.find((l) => l.code === code)?.label.split(' ')[0] || '🌐';
   const getCode = (code: string) => code.split('-')[0].toUpperCase();
 
   const handleExportMarkdown = () => {
@@ -147,7 +146,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
               <div className="card-content-block" style={{ background: 'transparent' }}>
                 <div className="block-title">
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>{getFlag(sourceLang)}</span>
+                    <Flag code={sourceLang} />
                     <span className="font-mono">{getCode(sourceLang)}</span>
                   </span>
                 </div>
@@ -160,7 +159,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
               <div className="card-content-block" style={{ background: 'transparent', borderTop: '1px solid var(--border-color)' }}>
                 <div className="block-title">
                   <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span>{getFlag(targetLang)}</span>
+                    <Flag code={targetLang} />
                     <span className="font-mono">{getCode(targetLang)}</span>
                     <Sparkles size={11} style={{ color: 'var(--color-accent-teal)' }} />
                   </span>
