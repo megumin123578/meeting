@@ -1,6 +1,6 @@
 import React from 'react';
 import { AnimatePresence } from 'motion/react';
-import { FileDown, MessageSquareDashed, Sparkles, Loader2 } from 'lucide-react';
+import { FileDown, MessageSquareDashed, Sparkles, Loader2, Volume2, VolumeX } from 'lucide-react';
 import { TranscriptCard } from './TranscriptCard';
 import { LanguageSelector, languages } from './LanguageSelector';
 import { ModelSelector } from './ModelSelector';
@@ -23,6 +23,9 @@ interface TranscriptListProps {
   setTargetLang: (lang: string) => void;
   model: string;
   onSaveModel: (model: string) => void;
+  isLiveMode?: boolean;
+  voiceEnabled?: boolean;
+  onToggleVoice?: () => void;
 }
 
 export const TranscriptList: React.FC<TranscriptListProps> = ({
@@ -42,6 +45,9 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
   setTargetLang,
   model,
   onSaveModel,
+  isLiveMode = false,
+  voiceEnabled = true,
+  onToggleVoice,
 }) => {
   const hasInterim = !!(interimSource || interimTarget);
   const getFlag = (code: string) => languages.find((l) => l.code === code)?.label.split(' ')[0] || '🌐';
@@ -83,9 +89,11 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
     <>
       {/* Header Bar */}
       <div className="transcript-header-bar">
-        <ModelSelector model={model} onSaveModel={onSaveModel} />
+        <div className="transcript-header-left">
+          <ModelSelector model={model} onSaveModel={onSaveModel} />
+        </div>
 
-        <div className="transcript-header-controls">
+        <div className="transcript-header-center">
           <LanguageSelector
             sourceLang={sourceLang}
             setSourceLang={setSourceLang}
@@ -93,6 +101,19 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
             setTargetLang={setTargetLang}
             compact
           />
+        </div>
+
+        <div className="transcript-header-controls">
+          {isLiveMode && onToggleVoice && (
+            <button
+              className={`btn btn-secondary icon-only-btn ${voiceEnabled ? 'voice-on' : ''}`}
+              title={voiceEnabled ? 'Tắt giọng đọc' : 'Bật giọng đọc'}
+              aria-pressed={voiceEnabled}
+              onClick={onToggleVoice}
+            >
+              {voiceEnabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            </button>
+          )}
 
           {transcripts.length > 0 && (
             <div className="transcript-actions">

@@ -5,6 +5,7 @@ interface UseLiveTranslateProps {
   sourceLang: string;
   targetLang: string;
   model: string;
+  voiceEnabled?: boolean;
   onTurnComplete: (originalText: string, translatedText: string, sourceLang: string, targetLang: string) => void;
   onShowToast: (message: string) => void;
 }
@@ -48,6 +49,7 @@ export const useLiveTranslate = ({
   sourceLang,
   targetLang,
   model,
+  voiceEnabled = true,
   onTurnComplete,
   onShowToast,
 }: UseLiveTranslateProps) => {
@@ -64,6 +66,16 @@ export const useLiveTranslate = ({
   // Playback queue
   const playCtxRef = useRef<AudioContext | null>(null);
   const playHeadRef = useRef<number>(0);
+  const playGainRef = useRef<GainNode | null>(null);
+  const voiceEnabledRef = useRef<boolean>(voiceEnabled);
+
+  // Toggle spoken translation on/off live by muting the playback gain node.
+  useEffect(() => {
+    voiceEnabledRef.current = voiceEnabled;
+    if (playGainRef.current) {
+      playGainRef.current.gain.value = voiceEnabled ? 1 : 0;
+    }
+  }, [voiceEnabled]);
 
   // Turn accumulators (mutable across renders, flushed on turnComplete)
   const turnSourceRef = useRef('');
@@ -108,6 +120,7 @@ export const useLiveTranslate = ({
       } catch {}
     }
     playCtxRef.current = null;
+    playGainRef.current = null;
     playHeadRef.current = 0;
 
     setIsLive(false);
@@ -121,15 +134,22 @@ export const useLiveTranslate = ({
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       const ctx = new AudioCtx({ sampleRate: PLAYBACK_RATE });
       playCtxRef.current = ctx;
+      playGainRef.current = null;
       playHeadRef.current = ctx.currentTime;
     }
     const ctx = playCtxRef.current;
+    if (!playGainRef.current) {
+      const gain = ctx.createGain();
+      gain.gain.value = voiceEnabledRef.current ? 1 : 0;
+      gain.connect(ctx.destination);
+      playGainRef.current = gain;
+    }
     const float = int16ToFloat32(int16) as Float32Array<ArrayBuffer>;
     const buffer = ctx.createBuffer(1, float.length, PLAYBACK_RATE);
     buffer.copyToChannel(float, 0, 0);
     const src = ctx.createBufferSource();
     src.buffer = buffer;
-    src.connect(ctx.destination);
+    src.connect(playGainRef.current);
     const startAt = Math.max(ctx.currentTime, playHeadRef.current);
     src.start(startAt);
     playHeadRef.current = startAt + buffer.duration;

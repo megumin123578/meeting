@@ -57,6 +57,9 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const [liveSource, setLiveSource] = useState<'mic' | 'tab'>(
     () => (localStorage.getItem('live_source') === 'tab' ? 'tab' : 'mic')
   );
+  const [liveVoiceEnabled, setLiveVoiceEnabled] = useState<boolean>(
+    () => localStorage.getItem('live_voice') !== 'off'
+  );
   const [showSettings, setShowSettings] = useState(false);
 
   const showToast = (message: string) => {
@@ -160,6 +163,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     sourceLang,
     targetLang,
     model,
+    voiceEnabled: liveVoiceEnabled,
     onTurnComplete: addTranscriptItem,
     onShowToast: showToast,
   });
@@ -179,6 +183,10 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   useEffect(() => {
     localStorage.setItem('live_source', liveSource);
   }, [liveSource]);
+
+  useEffect(() => {
+    localStorage.setItem('live_voice', liveVoiceEnabled ? 'on' : 'off');
+  }, [liveVoiceEnabled]);
 
   useEffect(() => {
     localStorage.setItem('ptt_key', pttKey);
@@ -338,6 +346,9 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               setTargetLang={setTargetLang}
               model={model}
               onSaveModel={saveModel}
+              isLiveMode={mode === 'live'}
+              voiceEnabled={liveVoiceEnabled}
+              onToggleVoice={() => setLiveVoiceEnabled((v) => !v)}
             />
             <RecordButton
               mode={mode}
