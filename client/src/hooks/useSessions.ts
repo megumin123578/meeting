@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TranscriptItem } from './useTranslator';
+import { downloadExport, type ExportFormat } from '../utils/exportTranscripts';
 
 export interface SessionMeta {
   id: string;
@@ -421,6 +422,25 @@ export const useSessions = ({ token, userId, onShowToast }: UseSessionsProps) =>
     [authHeaders, bumpSession, onShowToast]
   );
 
+  const exportSession = useCallback(
+    async (id: string, format: ExportFormat) => {
+      const session = sessions.find((s) => s.id === id);
+      if (!session) return;
+      try {
+        const items =
+          id === activeIdRef.current ? transcripts : await apiListTranscripts(id);
+        if (items.length === 0) {
+          onShowToast('⚠️ Phiên này chưa có nội dung để xuất.');
+          return;
+        }
+        downloadExport(session.title, items, format);
+      } catch {
+        onShowToast('❌ Không xuất được nội dung phiên.');
+      }
+    },
+    [sessions, transcripts, apiListTranscripts, onShowToast]
+  );
+
   const clearActiveSession = useCallback(async () => {
     const sessionId = activeIdRef.current;
     if (!sessionId) return;
@@ -449,5 +469,6 @@ export const useSessions = ({ token, userId, onShowToast }: UseSessionsProps) =>
     addTranscriptItem,
     deleteTranscript,
     clearActiveSession,
+    exportSession,
   };
 };

@@ -7,6 +7,8 @@ import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
 import { useLiveTranslate } from './hooks/useLiveTranslate';
 import { useAuth, type AuthUser } from './hooks/useAuth';
 import { RecordingStation } from './components/RecordingStation';
+import { RecordButton } from './components/RecordButton';
+import { WaveAnimation } from './components/WaveAnimation';
 import { TranscriptList } from './components/TranscriptList';
 import { SessionSidebar } from './components/SessionSidebar';
 import { LoginPage } from './components/LoginPage';
@@ -51,6 +53,9 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const [pttKey, setPttKey] = useState<string>(
     () => localStorage.getItem('ptt_key') || 'Space'
   );
+  const [liveSource, setLiveSource] = useState<'mic' | 'tab'>(
+    () => (localStorage.getItem('live_source') === 'tab' ? 'tab' : 'mic')
+  );
   const [showSettings, setShowSettings] = useState(false);
 
   const showToast = (message: string) => {
@@ -73,6 +78,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     addTranscriptItem,
     deleteTranscript,
     clearActiveSession,
+    exportSession,
   } = useSessions({ token, userId: user.id, onShowToast: showToast });
 
   const {
@@ -171,6 +177,10 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   }, [inputStyle]);
 
   useEffect(() => {
+    localStorage.setItem('live_source', liveSource);
+  }, [liveSource]);
+
+  useEffect(() => {
     localStorage.setItem('ptt_key', pttKey);
   }, [pttKey]);
 
@@ -209,7 +219,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     if (!sessionId) return;
 
     if (mode === 'live') {
-      await startLive();
+      await startLive(liveSource);
       return;
     }
     if (mode === 'realtime') {
@@ -228,12 +238,19 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     ttsStatus === 'error' ? 'err' :
     ttsStatus === 'checking' ? 'pending' : 'idle';
 
+  const isActive =
+    mode === 'live' ? isLive : mode === 'realtime' ? isListening : isRecording;
+  const activeAnalyser = mode === 'live' ? liveAnalyser : analyser;
+  const handleStop =
+    mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
+
   return (
     <div className="app-container">
       <header className="app-header">
         <div className="app-title-section">
           <h1 className="app-title">SpeakLink</h1>
         </div>
+        <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', position: 'relative' }}>
           <button
             className="status-pill-group topbar-status"
@@ -279,35 +296,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 
       <div className="dashboard-grid">
         <div className="sidebar-col">
-          <RecordingStation
-            mode={mode}
-            setMode={setMode}
-            inputStyle={inputStyle}
-            pttKey={pttKey}
-            isLiveModelSelected={isLiveModelSelected}
-            isActive={
-              mode === 'live'
-                ? isLive
-                : mode === 'realtime'
-                ? isListening
-                : isRecording
-            }
-            onStart={() => void handleStart()}
-            onStop={
-              mode === 'live'
-                ? stopLive
-                : mode === 'realtime'
-                ? stopListening
-                : stopRecording
-            }
-            cabinInterval={cabinInterval}
-            setCabinInterval={setCabinInterval}
-            analyser={mode === 'live' ? liveAnalyser : analyser}
-            isTranslating={isTranslating}
-          />
-        </div>
-
-        <div className="content-col">
           <SessionSidebar
             sessions={sessions}
             activeId={activeId}
@@ -315,7 +303,22 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
             onCreate={createSession}
             onRename={renameSession}
             onDelete={deleteSession}
+            onExport={exportSession}
           />
+          <RecordingStation
+            mode={mode}
+            setMode={setMode}
+            isLiveModelSelected={isLiveModelSelected}
+            isActive={isActive}
+            onStop={handleStop}
+            cabinInterval={cabinInterval}
+            setCabinInterval={setCabinInterval}
+            liveSource={liveSource}
+            setLiveSource={setLiveSource}
+          />
+        </div>
+
+        <div className="content-col">
           <div className="transcript-panel">
             <TranscriptList
               transcripts={transcripts}
@@ -335,6 +338,15 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               setTargetLang={setTargetLang}
               model={model}
               onSaveModel={saveModel}
+            />
+            <RecordButton
+              mode={mode}
+              inputStyle={inputStyle}
+              pttKey={pttKey}
+              isActive={isActive}
+              onStart={() => void handleStart()}
+              onStop={handleStop}
+              isTranslating={isTranslating}
             />
           </div>
         </div>

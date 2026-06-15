@@ -207,7 +207,7 @@ export const useLiveTranslate = ({
     }
   }, [cleanup, onShowToast, onTurnComplete, playPcmChunk]);
 
-  const startLive = useCallback(async () => {
+  const startLive = useCallback(async (audioSource: 'mic' | 'tab' = 'mic') => {
     if (!token) {
       onShowToast('⚠️ Cần đăng nhập trước.');
       return;
@@ -255,8 +255,28 @@ export const useLiveTranslate = ({
         }, { once: true });
       });
 
-      // 2) Set up mic + worklet
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // 2) Capture audio (browser tab/system audio or microphone) + worklet
+      let stream: MediaStream;
+      if (audioSource === 'tab') {
+        // Browsers only expose tab/system audio through getDisplayMedia, and most
+        // require a video track to be requested alongside it. We grab the audio,
+        // then drop the video track since Live API only needs the sound.
+        const display = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+        });
+        const audioTracks = display.getAudioTracks();
+        if (audioTracks.length === 0) {
+          display.getTracks().forEach((t) => t.stop());
+          throw new Error('Không có âm thanh được chia sẻ. Hãy bật "Chia sẻ âm thanh" (Share tab audio) khi chọn tab/cửa sổ.');
+        }
+        display.getVideoTracks().forEach((t) => t.stop());
+        stream = new MediaStream(audioTracks);
+        // If the user stops sharing from the browser bar, end the live session.
+        audioTracks[0].addEventListener('ended', () => cleanup());
+      } else {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      }
       streamRef.current = stream;
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;

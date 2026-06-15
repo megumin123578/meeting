@@ -3,9 +3,10 @@ import React, { useRef, useEffect } from 'react';
 interface WaveAnimationProps {
   isRecording: boolean;
   analyser: AnalyserNode | null;
+  className?: string;
 }
 
-export const WaveAnimation: React.FC<WaveAnimationProps> = ({ isRecording, analyser }) => {
+export const WaveAnimation: React.FC<WaveAnimationProps> = ({ isRecording, analyser, className }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const animationRef = useRef<number | null>(null);
 
@@ -135,7 +136,7 @@ export const WaveAnimation: React.FC<WaveAnimationProps> = ({ isRecording, analy
   }, [isRecording, analyser]);
 
   return (
-    <div className="wave-container">
+    <div className={`wave-container ${className ?? ''}`}>
       <canvas ref={canvasRef} className="wave-canvas" style={{ width: '100%', height: '100%' }} />
       {!isRecording && (
         <span

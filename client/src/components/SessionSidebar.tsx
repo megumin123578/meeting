@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Plus, Check, X, Pencil, Trash2, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Plus, Check, X, Pencil, Trash2, Download } from 'lucide-react';
 import type { SessionMeta } from '../hooks/useSessions';
+import { EXPORT_FORMATS, type ExportFormat } from '../utils/exportTranscripts';
 
 interface SessionSidebarProps {
   sessions: SessionMeta[];
@@ -9,15 +10,9 @@ interface SessionSidebarProps {
   onCreate: () => void;
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
+  onExport: (id: string, format: ExportFormat) => void;
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' });
-  } catch {
-    return '';
-  }
-}
 
 export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   sessions,
@@ -26,10 +21,23 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   onCreate,
   onRename,
   onDelete,
+  onExport,
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
-  const [collapsed, setCollapsed] = useState(false);
+  const [exportId, setExportId] = useState<string | null>(null);
+
+  // Close the export menu on any outside click / Escape.
+  useEffect(() => {
+    if (!exportId) return;
+    const close = () => setExportId(null);
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [exportId]);
 
   const startEdit = (s: SessionMeta) => {
     setEditingId(s.id);
@@ -48,29 +56,18 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
   };
 
   return (
-    <div className={`session-sidebar ${collapsed ? 'collapsed' : ''}`}>
+    <div className="session-sidebar">
       <div className="session-sidebar-header">
-        {!collapsed && (
-          <button className="btn btn-primary session-new-btn" onClick={onCreate} title="Tạo phiên mới">
-            <Plus size={14} />
-            <span>Phiên mới</span>
-          </button>
-        )}
-        <button
-          className="session-icon-btn session-toggle-btn"
-          onClick={() => setCollapsed((c) => !c)}
-          title={collapsed ? 'Mở danh sách phiên' : 'Thu gọn danh sách phiên'}
-          aria-label={collapsed ? 'Mở danh sách phiên' : 'Thu gọn danh sách phiên'}
-        >
-          {collapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+        <button className="btn btn-primary session-new-btn" onClick={onCreate} title="Tạo phiên mới">
+          <Plus size={14} />
+          <span>Thêm</span>
         </button>
       </div>
 
-      {!collapsed && (
-        <div className="session-list">
-          {sessions.length === 0
-            ? null
-            : sessions.map((s) => {
+      <div className="session-list">
+        {sessions.length === 0
+          ? null
+          : sessions.map((s) => {
                 const isActive = s.id === activeId;
                 const isEditing = s.id === editingId;
                 return (
@@ -102,11 +99,37 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                       <>
                         <div className="session-item-main">
                           <span className="session-item-title">{s.title}</span>
-                          <span className="session-item-meta font-mono">
-                            {s.count} đoạn · {formatDate(s.createdAt)}
-                          </span>
                         </div>
                         <div className="session-item-actions">
+                          <div className="session-export-wrap">
+                            <button
+                              className="session-icon-btn"
+                              title="Tải xuống"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setExportId((cur) => (cur === s.id ? null : s.id));
+                              }}
+                            >
+                              <Download size={13} />
+                            </button>
+                            {exportId === s.id && (
+                              <div className="session-export-menu" onClick={(e) => e.stopPropagation()}>
+                                {EXPORT_FORMATS.map((f) => (
+                                  <button
+                                    key={f.value}
+                                    className="session-export-option"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onExport(s.id, f.value);
+                                      setExportId(null);
+                                    }}
+                                  >
+                                    {f.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                           <button
                             className="session-icon-btn"
                             title="Đổi tên"
@@ -135,8 +158,7 @@ export const SessionSidebar: React.FC<SessionSidebarProps> = ({
                   </div>
                 );
               })}
-        </div>
-      )}
+      </div>
     </div>
   );
 };
