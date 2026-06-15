@@ -6,18 +6,17 @@ import { useEdgeTTS } from './hooks/useEdgeTTS';
 import { useRealtimeTranslator } from './hooks/useRealtimeTranslator';
 import { useLiveTranslate } from './hooks/useLiveTranslate';
 import { useAuth, type AuthUser } from './hooks/useAuth';
-import { AdminPanel } from './components/AdminPanel';
 import { RecordingStation } from './components/RecordingStation';
 import { TranscriptList } from './components/TranscriptList';
 import { SessionSidebar } from './components/SessionSidebar';
 import { LoginPage } from './components/LoginPage';
-import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
 
 export const App: React.FC = () => {
-  const { token, user, loading, login, register, logout } = useAuth();
+  const { token, user, loading, login, register, resetPassword, logout } = useAuth();
 
   if (loading) {
     return (
@@ -28,7 +27,7 @@ export const App: React.FC = () => {
   }
 
   if (!token || !user) {
-    return <LoginPage onLogin={login} onRegister={register} />;
+    return <LoginPage onLogin={login} onRegister={register} onReset={resetPassword} />;
   }
 
   return <AuthedApp token={token} user={user} onLogout={logout} />;
@@ -220,6 +219,15 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     await startRecording(sourceLang);
   };
 
+  const keyDot =
+    isKeyValid === 'valid' ? 'ok' :
+    isKeyValid === 'invalid' ? 'err' :
+    isKeyValid === 'checking' ? 'pending' : 'idle';
+  const ttsDot =
+    ttsStatus === 'ready' ? 'ok' :
+    ttsStatus === 'error' ? 'err' :
+    ttsStatus === 'checking' ? 'pending' : 'idle';
+
   return (
     <div className="app-container">
       <header className="app-header">
@@ -227,6 +235,14 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
           <h1 className="app-title">SpeakLink</h1>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', position: 'relative' }}>
+          <button
+            className="status-pill-group topbar-status"
+            onClick={() => setShowSettings((v) => !v)}
+            title="Trạng thái kết nối — bấm để mở cài đặt"
+          >
+            <span className={`status-pill ${keyDot}`}>Gemini</span>
+            <span className={`status-pill ${ttsDot}`}>TTS</span>
+          </button>
           <span className="user-chip">
             <User size={12} />
             <strong>{user.username}</strong>
@@ -242,6 +258,14 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 
           {showSettings && (
             <SettingsPopover
+              apiKey={apiKey}
+              onSaveKey={saveApiKey}
+              isKeyValid={isKeyValid}
+              keyError={keyError}
+              onCheckKey={checkApiKey}
+              ttsStatus={ttsStatus}
+              onCheckTTS={checkEdgeTTS}
+              model={model}
               inputStyle={inputStyle}
               setInputStyle={setInputStyle}
               pttKey={pttKey}
@@ -255,17 +279,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 
       <div className="dashboard-grid">
         <div className="sidebar-col">
-          <AdminPanel
-            apiKey={apiKey}
-            onSaveKey={saveApiKey}
-            isKeyValid={isKeyValid}
-            keyError={keyError}
-            onCheckKey={checkApiKey}
-            ttsStatus={ttsStatus}
-            onCheckTTS={checkEdgeTTS}
-            model={model}
-          />
-
           <RecordingStation
             mode={mode}
             setMode={setMode}
@@ -342,6 +355,14 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 };
 
 interface SettingsPopoverProps {
+  apiKey: string;
+  onSaveKey: (key: string) => void;
+  isKeyValid: 'valid' | 'invalid' | 'unchecked' | 'checking';
+  keyError: string;
+  onCheckKey: (keyToCheck?: string, modelToCheck?: string) => Promise<boolean>;
+  ttsStatus: 'ready' | 'error' | 'checking' | 'unconfigured';
+  onCheckTTS: () => Promise<void> | void;
+  model: string;
   inputStyle: InputStyle;
   setInputStyle: (s: InputStyle) => void;
   pttKey: string;
@@ -351,6 +372,14 @@ interface SettingsPopoverProps {
 }
 
 const SettingsPopover: React.FC<SettingsPopoverProps> = ({
+  apiKey,
+  onSaveKey,
+  isKeyValid,
+  keyError,
+  onCheckKey,
+  ttsStatus,
+  onCheckTTS,
+  model,
   inputStyle,
   setInputStyle,
   pttKey,
@@ -359,6 +388,40 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   onClose,
 }) => {
   const [capturing, setCapturing] = useState(false);
+  const [localKey, setLocalKey] = useState(apiKey);
+  const [testing, setTesting] = useState(false);
+
+  // Sync local state when parent loads config from server asynchronously.
+  useEffect(() => {
+    setLocalKey(apiKey);
+  }, [apiKey]);
+
+  // Auto-save the API key (debounced) — no manual save button.
+  useEffect(() => {
+    if (localKey === apiKey) return;
+    const t = setTimeout(() => onSaveKey(localKey), 600);
+    return () => clearTimeout(t);
+  }, [localKey, apiKey, onSaveKey]);
+
+  const handleTest = async () => {
+    setTesting(true);
+    onSaveKey(localKey); // Persist immediately before testing
+    try {
+      await Promise.all([onCheckKey(localKey, model), onCheckTTS()]);
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  const testIcon = testing ? (
+    <RefreshCw size={16} className="animate-spin" />
+  ) : isKeyValid === 'valid' ? (
+    <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+  ) : isKeyValid === 'invalid' ? (
+    <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
+  ) : (
+    <Activity size={16} />
+  );
 
   useEffect(() => {
     const onDown = (e: MouseEvent) => {
@@ -407,6 +470,46 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
           <X size={14} />
         </button>
       </div>
+
+      <div className="settings-group">
+        <label className="settings-label">Google AI Studio API Key</label>
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <input
+            type="password"
+            className="input-control"
+            placeholder="AIzaSy..."
+            value={localKey}
+            onChange={(e) => setLocalKey(e.target.value)}
+          />
+          <button
+            className="topbar-icon-btn settings-test-btn"
+            onClick={handleTest}
+            disabled={testing}
+            title="Kiểm tra kết nối"
+          >
+            {testIcon}
+          </button>
+        </div>
+        {isKeyValid === 'invalid' && keyError && (
+          <div
+            className="font-mono"
+            style={{
+              fontSize: '0.72rem',
+              color: 'var(--color-error)',
+              lineHeight: 1.4,
+              overflowWrap: 'anywhere',
+              background: 'rgba(239, 68, 68, 0.06)',
+              padding: '0.5rem 0.75rem',
+              borderRadius: '0.5rem',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+            }}
+          >
+            {keyError}
+          </div>
+        )}
+      </div>
+
+      <div className="settings-divider"></div>
 
       <div className="settings-group">
         <div className="toggle-row">

@@ -78,10 +78,20 @@ export const useAuth = () => {
     return data.user as AuthUser;
   }, []);
 
+  const resetPassword = useCallback(async (username: string, password: string) => {
+    const res = await fetch('/api/auth/reset-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Đặt lại mật khẩu thất bại.');
+  }, []);
+
   const logout = useCallback(() => {
     persistToken(null);
     setUser(null);
   }, []);
 
-  return { token, user, loading, login, register, logout };
+  return { token, user, loading, login, register, resetPassword, logout };
 };

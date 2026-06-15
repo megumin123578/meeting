@@ -23,6 +23,48 @@ interface UseTranslatorProps {
 
 const DEFAULT_MODEL = (import.meta as any).env?.VITE_DEFAULT_MODEL || 'gemini-2.5-flash';
 
+// --- Gemini key-check cache (localStorage) -------------------------------
+// Tránh đốt quota Gemini mỗi lần F5: nhớ kết quả check theo (key, model).
+const CHECK_CACHE_KEY = 'gemini_check_cache';
+const VALID_TTL_MS = 12 * 60 * 60 * 1000; // key hợp lệ: tin trong 12h
+const INVALID_TTL_MS = 10 * 60 * 1000; // key lỗi: chỉ tin 10 phút (để sửa xong check lại sớm)
+
+interface CheckCache {
+  fp: string;
+  model: string;
+  status: 'valid' | 'invalid';
+  message: string;
+  checkedAt: number;
+}
+
+// Hash nhẹ, KHÔNG lưu key thô vào localStorage.
+function keyFingerprint(key: string): string {
+  let h = 0;
+  for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+  return `${key.length}:${h}`;
+}
+
+function readCheckCache(): CheckCache | null {
+  try {
+    return JSON.parse(localStorage.getItem(CHECK_CACHE_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+function writeCheckCache(c: CheckCache) {
+  try {
+    localStorage.setItem(CHECK_CACHE_KEY, JSON.stringify(c));
+  } catch {
+    /* ignore quota/serialization errors */
+  }
+}
+
+function isCacheFresh(c: CheckCache): boolean {
+  const ttl = c.status === 'valid' ? VALID_TTL_MS : INVALID_TTL_MS;
+  return Date.now() - c.checkedAt < ttl;
+}
+
 export const useTranslator = ({ onShowToast, token, onTranscript }: UseTranslatorProps) => {
   const [apiKey, setApiKey] = useState<string>('');
   const [model, setModel] = useState<string>(DEFAULT_MODEL);
@@ -52,10 +94,29 @@ export const useTranslator = ({ onShowToast, token, onTranscript }: UseTranslato
         }
         const data = await res.json();
         if (cancelled) return;
-        setApiKey(data.apiKey || '');
-        setModel((data.model && data.model.trim()) || DEFAULT_MODEL);
-        setIsKeyValid('unchecked');
+        const loadedKey = (data.apiKey || '').trim();
+        const loadedModel = (data.model && data.model.trim()) || DEFAULT_MODEL;
+        setApiKey(loadedKey);
+        setModel(loadedModel);
         setKeyError('');
+
+        // Auto-check khi load trang (= mỗi lần F5).
+        void checkEdgeTTS(); // TTS free → check thoải mái.
+        if (!loadedKey) {
+          setIsKeyValid('unchecked');
+          return;
+        }
+        const cache = readCheckCache();
+        const fp = keyFingerprint(loadedKey);
+        if (cache && cache.fp === fp && cache.model === loadedModel && isCacheFresh(cache)) {
+          // Còn tươi → dùng lại, không gọi Gemini (không đốt quota).
+          setIsKeyValid(cache.status);
+          setKeyError(cache.status === 'invalid' ? cache.message : '');
+        } else {
+          // Chưa có cache / key|model đổi / hết hạn → check 1 lần (sẽ tự ghi cache).
+          setIsKeyValid('unchecked');
+          void checkApiKey(loadedKey, loadedModel);
+        }
       } catch (err) {
         console.warn('Failed to load user config:', err);
       }
@@ -63,6 +124,8 @@ export const useTranslator = ({ onShowToast, token, onTranscript }: UseTranslato
     return () => {
       cancelled = true;
     };
+    // checkApiKey/checkEdgeTTS cố tình không đưa vào deps để tránh re-run mỗi render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const pushConfig = useCallback(
@@ -122,11 +185,14 @@ export const useTranslator = ({ onShowToast, token, onTranscript }: UseTranslato
       if (response.ok && data.ok) {
         setKeyError('');
         setIsKeyValid('valid');
+        writeCheckCache({ fp: keyFingerprint(key), model: selectedModel, status: 'valid', message: '', checkedAt: Date.now() });
         return true;
       }
 
-      setKeyError(data.message || data.error || `Key validation failed (HTTP ${response.status}).`);
+      const msg = data.message || data.error || `Key validation failed (HTTP ${response.status}).`;
+      setKeyError(msg);
       setIsKeyValid('invalid');
+      writeCheckCache({ fp: keyFingerprint(key), model: selectedModel, status: 'invalid', message: msg, checkedAt: Date.now() });
       return false;
     } catch (err: any) {
       console.error('API key check failed:', err);

@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const { findUserByUsername, findUserById, createUser } = require('../utils/db');
+const { findUserByUsername, findUserById, createUser, updateUser } = require('../utils/db');
 const { signToken, requireAuth } = require('../utils/auth');
 
 const router = express.Router();
@@ -62,6 +62,30 @@ router.post('/auth/login', async (req, res) => {
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ error: err.message || 'Đăng nhập thất bại.' });
+  }
+});
+
+// TODO: tạm thời cho phép đổi mật khẩu chỉ bằng username (chưa xác thực).
+// Cần bổ sung xác minh danh tính (email/câu hỏi bảo mật) sau.
+router.post('/auth/reset-password', async (req, res) => {
+  try {
+    const { username, password } = req.body || {};
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Cần username và mật khẩu mới.' });
+    }
+    if (typeof password !== 'string' || password.length < 6) {
+      return res.status(400).json({ error: 'Password tối thiểu 6 ký tự.' });
+    }
+    const user = findUserByUsername(username);
+    if (!user) {
+      return res.status(404).json({ error: 'Username không tồn tại.' });
+    }
+    const passwordHash = await bcrypt.hash(password, 10);
+    updateUser(user.id, { passwordHash });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('reset-password error:', err);
+    return res.status(500).json({ error: err.message || 'Đặt lại mật khẩu thất bại.' });
   }
 });
 

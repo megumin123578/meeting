@@ -124,7 +124,7 @@ export const useLiveTranslate = ({
       playHeadRef.current = ctx.currentTime;
     }
     const ctx = playCtxRef.current;
-    const float = int16ToFloat32(int16);
+    const float = int16ToFloat32(int16) as Float32Array<ArrayBuffer>;
     const buffer = ctx.createBuffer(1, float.length, PLAYBACK_RATE);
     buffer.copyToChannel(float, 0, 0);
     const src = ctx.createBufferSource();
