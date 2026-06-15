@@ -118,7 +118,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, onRes
 
           {(mode === 'register' || mode === 'forgot') && (
             <div className="input-group">
-              <label className="input-label">Xác nhận password</label>
+              <label className="input-label">Xác nhận mật khẩu</label>
               <input
                 type="password"
                 className="input-control"
