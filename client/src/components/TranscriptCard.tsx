@@ -58,10 +58,7 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
       className="transcript-card"
     >
       {/* Top Meta Bar */}
-      <div className="card-meta-bar">
-        <span className="card-langs font-mono">
-          <Flag code={item.sourceLang} /> {getLanguageName(item.sourceLang)} ➡️ <Flag code={item.targetLang} /> {getLanguageName(item.targetLang)}
-        </span>
+      <div className="card-meta-bar" style={{ justifyContent: 'flex-end' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
           <span>{item.timestamp}</span>
           <button
@@ -89,7 +86,9 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
         {/* Source Text Block */}
         <div className="card-content-block">
           <div className="block-title">
-            <span>Gốc ({item.sourceLang.split('-')[0].toUpperCase()})</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              Gốc · <Flag code={item.sourceLang} /> {getLanguageName(item.sourceLang)}
+            </span>
             <button
               onClick={handleCopyOriginal}
               style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
@@ -120,9 +119,9 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
         {/* Target Text Block */}
         <div className="card-content-block" style={{ borderLeft: '1px solid var(--border-color)' }}>
           <div className="block-title">
-            <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <Sparkles size={11} style={{ color: 'var(--color-accent-teal)' }} />
-              Dịch ({item.targetLang.split('-')[0].toUpperCase()})
+              Dịch · <Flag code={item.targetLang} /> {getLanguageName(item.targetLang)}
             </span>
             <button
               onClick={handleCopyTranslated}

@@ -29,6 +29,9 @@ interface UseSessionsProps {
 const legacyKey = (userId: string | null) =>
   userId ? `translator_transcripts_${userId}` : 'translator_transcripts_guest';
 
+const activeSessionKey = (userId: string | null) =>
+  userId ? `translator_active_session_${userId}` : 'translator_active_session_guest';
+
 const pad = (n: number) => String(n).padStart(2, '0');
 
 function defaultSessionTitle(): string {
@@ -76,7 +79,9 @@ export const useSessions = ({ token, userId, onShowToast }: UseSessionsProps) =>
   const activeIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeIdRef.current = activeId;
-  }, [activeId]);
+    // Remember the open session so a page refresh restores it.
+    if (userId && activeId) localStorage.setItem(activeSessionKey(userId), activeId);
+  }, [activeId, userId]);
 
   // Holds an in-flight auto-create so rapid transcripts don't spawn many sessions
   const creatingRef = useRef<Promise<string> | null>(null);
@@ -192,9 +197,10 @@ export const useSessions = ({ token, userId, onShowToast }: UseSessionsProps) =>
         setSessions(list);
 
         if (list.length > 0) {
-          const first = list[0];
-          setActiveId(first.id);
-          const items = await apiListTranscripts(first.id);
+          const stored = localStorage.getItem(activeSessionKey(userId));
+          const chosen = (stored && list.find((s) => s.id === stored)) || list[0];
+          setActiveId(chosen.id);
+          const items = await apiListTranscripts(chosen.id);
           if (!cancelled) setTranscripts(items);
         } else {
           setActiveId(null);
