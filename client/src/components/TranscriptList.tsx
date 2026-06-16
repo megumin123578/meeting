@@ -167,7 +167,7 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
                 <p className="block-text" style={{ color: 'var(--color-text-primary)', fontWeight: 500, whiteSpace: 'pre-line' }}>
                   {interimTarget || (
                     <span className="font-mono" style={{ fontStyle: 'italic', opacity: 0.7, color: 'var(--color-accent-indigo)' }}>
-                      ⏳ Đang dịch...
+                      Đang dịch...
                     </span>
                   )}
                 </p>

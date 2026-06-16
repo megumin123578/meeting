@@ -14,7 +14,7 @@ import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
-import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, Menu } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
@@ -414,56 +414,60 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 
   return (
     <ConfirmProvider>
-    <AppShell user={user} currentPath={currentPath} onNavigate={navigateTo} onLogout={onLogout}>
+    <AppShell
+      user={user}
+      currentPath={currentPath}
+      onNavigate={navigateTo}
+      onLogout={onLogout}
+      topbarTitle={(
+        <div className="app-title-section app-topbar-title-section">
+          <h1 className="app-title app-topbar-title">SpeakLink</h1>
+        </div>
+      )}
+      topbarContent={(
+        <>
+          <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
+          <div className="app-topbar-settings">
+            <button
+              className="status-pill-group topbar-status"
+              onClick={() => setShowSettings((v) => !v)}
+              title="Trạng thái kết nối — bấm để mở cài đặt"
+            >
+              <span className={`status-pill ${keyDot}`}>Gemini</span>
+              <span className={`status-pill ${ttsDot}`}>TTS</span>
+            </button>
+            <button
+              className="topbar-icon-btn"
+              onClick={() => setShowSettings((v) => !v)}
+              title="Cài đặt"
+              aria-expanded={showSettings}
+            >
+              <SettingsIcon size={16} />
+            </button>
+
+            {showSettings && (
+              <SettingsPopover
+                apiKey={apiKey}
+                onSaveKey={saveApiKey}
+                isKeyValid={isKeyValid}
+                keyError={keyError}
+                onCheckKey={checkApiKey}
+                ttsStatus={ttsStatus}
+                onCheckTTS={checkEdgeTTS}
+                model={model}
+                inputStyle={inputStyle}
+                setInputStyle={setInputStyle}
+                pttKey={pttKey}
+                setPttKey={setPttKey}
+                onLogout={onLogout}
+                onClose={() => setShowSettings(false)}
+              />
+            )}
+          </div>
+        </>
+      )}
+    >
     <div className="app-container">
-      <header className="app-header">
-        <div className="app-title-section">
-          <h1 className="app-title">SpeakLink</h1>
-        </div>
-        <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', position: 'relative' }}>
-          <button
-            className="status-pill-group topbar-status"
-            onClick={() => setShowSettings((v) => !v)}
-            title="Trạng thái kết nối — bấm để mở cài đặt"
-          >
-            <span className={`status-pill ${keyDot}`}>Gemini</span>
-            <span className={`status-pill ${ttsDot}`}>TTS</span>
-          </button>
-          <span className="user-chip">
-            <User size={12} />
-            <strong>{user.username}</strong>
-          </span>
-          <button
-            className="topbar-icon-btn"
-            onClick={() => setShowSettings((v) => !v)}
-            title="Cài đặt"
-            aria-expanded={showSettings}
-          >
-            <SettingsIcon size={16} />
-          </button>
-
-          {showSettings && (
-            <SettingsPopover
-              apiKey={apiKey}
-              onSaveKey={saveApiKey}
-              isKeyValid={isKeyValid}
-              keyError={keyError}
-              onCheckKey={checkApiKey}
-              ttsStatus={ttsStatus}
-              onCheckTTS={checkEdgeTTS}
-              model={model}
-              inputStyle={inputStyle}
-              setInputStyle={setInputStyle}
-              pttKey={pttKey}
-              setPttKey={setPttKey}
-              onLogout={onLogout}
-              onClose={() => setShowSettings(false)}
-            />
-          )}
-        </div>
-      </header>
-
       <div className="dashboard-grid">
         <div className="sidebar-col">
           <SessionSidebar
@@ -545,94 +549,98 @@ interface AppShellProps {
   currentPath: string;
   onNavigate: (path: string) => void;
   onLogout: () => void;
+  topbarTitle?: React.ReactNode;
+  topbarContent?: React.ReactNode;
   children: React.ReactNode;
 }
 
-const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLogout, children }) => {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('app_sidebar_collapsed') === 'true');
+const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topbarTitle, topbarContent, children }) => {
+  const [adminMenuOpen, setAdminMenuOpen] = useState(false);
   const isHome = currentPath === '/';
   const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
   const isAdminUsers = currentPath === '/admin' || currentPath === '/admin/users';
   const isAdminAudit = currentPath === '/admin/audit';
   const isAdminSettings = currentPath === '/admin/settings';
 
-  useEffect(() => {
-    localStorage.setItem('app_sidebar_collapsed', String(sidebarCollapsed));
-  }, [sidebarCollapsed]);
+  const navigateAndClose = (path: string) => {
+    setAdminMenuOpen(false);
+    onNavigate(path);
+  };
 
   return (
-    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
-      <aside className="app-sidebar" aria-label="Primary navigation">
-        <button
-          type="button"
-          className="app-sidebar-toggle app-sidebar-toggle-rail"
-          onClick={() => setSidebarCollapsed((v) => !v)}
-          title={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
-          aria-label={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
-          aria-expanded={!sidebarCollapsed}
-        >
-          <Menu size={16} />
-        </button>
-        
-        <nav className="app-sidebar-nav">
+    <div className="app-shell">
+      <header className="app-topbar">
+        {topbarTitle}
+        <nav className="app-topbar-nav" aria-label="Primary navigation">
           <button
             type="button"
-            className={`app-sidebar-link ${isHome ? 'active' : ''}`}
-            onClick={() => onNavigate('/')}
+            className={`app-topbar-link ${isHome ? 'active' : ''}`}
+            onClick={() => navigateAndClose('/')}
           >
             <Activity size={16} />
             <span>Workspace</span>
           </button>
           {user.isAdmin && (
-            <div className={`app-sidebar-group ${isAdmin ? 'active' : ''}`}>
+            <div
+              className="app-topbar-menu"
+              onBlur={(e) => {
+                const nextFocus = e.relatedTarget;
+                if (!(nextFocus instanceof Node) || !e.currentTarget.contains(nextFocus)) {
+                  setAdminMenuOpen(false);
+                }
+              }}
+            >
               <button
                 type="button"
-                className={`app-sidebar-link ${isAdmin ? 'active' : ''}`}
-                onClick={() => onNavigate('/admin/users')}
+                className={`app-topbar-link ${isAdmin ? 'active' : ''}`}
+                onClick={() => setAdminMenuOpen((v) => !v)}
+                aria-haspopup="menu"
+                aria-expanded={adminMenuOpen}
               >
                 <ShieldCheck size={16} />
                 <span>Admin</span>
+                <ChevronDown size={14} className={`app-topbar-chevron ${adminMenuOpen ? 'open' : ''}`} />
               </button>
-              <div className="app-sidebar-subnav" aria-label="Admin sections">
-                <button
-                  type="button"
-                  className={`app-sidebar-sublink ${isAdminUsers ? 'active' : ''}`}
-                  onClick={() => onNavigate('/admin/users')}
-                >
-                  <Users size={14} />
-                  <span>Users</span>
-                </button>
-                <button
-                  type="button"
-                  className={`app-sidebar-sublink ${isAdminAudit ? 'active' : ''}`}
-                  onClick={() => onNavigate('/admin/audit')}
-                >
-                  <ClipboardList size={14} />
-                  <span>Audit</span>
-                </button>
-                <button
-                  type="button"
-                  className={`app-sidebar-sublink ${isAdminSettings ? 'active' : ''}`}
-                  onClick={() => onNavigate('/admin/settings')}
-                >
-                  <SettingsIcon size={14} />
-                  <span>Settings</span>
-                </button>
-              </div>
+              {adminMenuOpen && (
+                <div className="app-topbar-dropdown" role="menu" aria-label="Admin sections">
+                  <button
+                    type="button"
+                    className={`app-topbar-dropdown-item ${isAdminUsers ? 'active' : ''}`}
+                    onClick={() => navigateAndClose('/admin/users')}
+                    role="menuitem"
+                  >
+                    <Users size={14} />
+                    <span>Users</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`app-topbar-dropdown-item ${isAdminAudit ? 'active' : ''}`}
+                    onClick={() => navigateAndClose('/admin/audit')}
+                    role="menuitem"
+                  >
+                    <ClipboardList size={14} />
+                    <span>Audit</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`app-topbar-dropdown-item ${isAdminSettings ? 'active' : ''}`}
+                    onClick={() => navigateAndClose('/admin/settings')}
+                    role="menuitem"
+                  >
+                    <SettingsIcon size={14} />
+                    <span>Settings</span>
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </nav>
-        <div className="app-sidebar-footer">
-          <div className="app-sidebar-user">
-            <User size={14} />
-            <span>{user.username}</span>
+        {topbarContent && (
+          <div className="app-topbar-extra">
+            {topbarContent}
           </div>
-          <button type="button" className="app-sidebar-link compact" onClick={onLogout}>
-            <LogOut size={16} />
-            <span>Logout</span>
-          </button>
-        </div>
-      </aside>
+        )}
+      </header>
       <main className="app-main">
         {children}
       </main>

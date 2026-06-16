@@ -138,7 +138,7 @@ export const RecordButton: React.FC<RecordButtonProps> = ({
           className="font-mono"
           style={{ fontSize: '0.75rem', color: 'var(--color-accent-indigo)', animation: 'pulse 1.5s infinite' }}
         >
-          ⏳ Đang gửi văn bản dịch thuật...
+          Đang gửi văn bản dịch thuật...
         </span>
       )}
     </div>
