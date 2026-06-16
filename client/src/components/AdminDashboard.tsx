@@ -125,9 +125,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
   const [resetPassword, setResetPassword] = useState('');
-  const [resetGeneratePassword, setResetGeneratePassword] = useState(true);
   const [resetMustChangePassword, setResetMustChangePassword] = useState(true);
-  const [temporaryPassword, setTemporaryPassword] = useState<{ username: string; password: string } | null>(null);
 
   const [query, setQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilter>('all');
@@ -140,7 +138,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('user');
-  const [newGeneratePassword, setNewGeneratePassword] = useState(true);
   const [newMustChangePassword, setNewMustChangePassword] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -265,7 +262,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUsername.trim() || (!newGeneratePassword && !newPassword)) return;
+    if (!newUsername.trim() || !newPassword) return;
     setCreating(true);
     try {
       const res = await fetch('/api/admin/users', {
@@ -273,10 +270,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         headers: authHeaders(true),
         body: JSON.stringify({
           username: newUsername.trim(),
-          password: newGeneratePassword ? undefined : newPassword,
+          password: newPassword,
           role: newRole,
-          generatePassword: newGeneratePassword,
-          mustChangePassword: newMustChangePassword || newGeneratePassword,
+          mustChangePassword: newMustChangePassword,
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -284,12 +280,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setNewUsername('');
       setNewPassword('');
       setNewRole('user');
-      setNewGeneratePassword(true);
       setNewMustChangePassword(true);
-      if (data.temporaryPassword) setTemporaryPassword({ username: data.user.username, password: data.temporaryPassword });
       loadUsers();
       loadAuditLogs();
-      onShowToast(`✅ Đã tạo người dùng "${data.user.username}".`);
     } catch (err: any) {
       onShowToast(`❌ ${err.message || 'Tạo user thất bại.'}`);
     } finally {
@@ -311,7 +304,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, ...data.user } : x)));
       if (selectedUser?.id === u.id) loadUserDetail(u.id);
       loadAuditLogs();
-      onShowToast(`✅ Đã đổi vai trò "${u.username}" thành ${role}.`);
     } catch (err: any) {
       onShowToast(`❌ ${err.message || 'Đổi vai trò thất bại.'}`);
     } finally {
@@ -333,7 +325,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, ...data.user } : x)));
       if (selectedUser?.id === u.id) loadUserDetail(u.id);
       loadAuditLogs();
-      onShowToast(approved ? `✅ Đã duyệt "${u.username}".` : `⛔ Đã khoá "${u.username}".`);
     } catch (err: any) {
       onShowToast(`❌ ${err.message || 'Cập nhật trạng thái thất bại.'}`);
     } finally {
@@ -382,7 +373,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         setSelectedSessions([]);
       }
       loadAuditLogs();
-      onShowToast(`🗑️ Đã xoá "${u.username}".`);
     } catch (err: any) {
       onShowToast(`❌ ${err.message || 'Xoá thất bại.'}`);
     } finally {
@@ -393,14 +383,13 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const openResetPassword = (u: AdminUser) => {
     setResetTarget(u);
     setResetPassword('');
-    setResetGeneratePassword(true);
     setResetMustChangePassword(true);
   };
 
   const submitResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetTarget) return;
-    if (!resetGeneratePassword && resetPassword.length < 6) {
+    if (resetPassword.length < 6) {
       onShowToast('❌ Password tối thiểu 6 ký tự.');
       return;
     }
@@ -410,19 +399,14 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         method: 'POST',
         headers: authHeaders(true),
         body: JSON.stringify({
-          password: resetGeneratePassword ? undefined : resetPassword,
-          generatePassword: resetGeneratePassword,
-          mustChangePassword: resetMustChangePassword || resetGeneratePassword,
+          password: resetPassword,
+          mustChangePassword: resetMustChangePassword,
         }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Đặt lại mật khẩu thất bại.');
-      if (data.temporaryPassword) {
-        setTemporaryPassword({ username: resetTarget.username, password: data.temporaryPassword });
-      }
       loadUsers();
       loadAuditLogs();
-      onShowToast(`🔑 Đã đặt lại mật khẩu cho "${resetTarget.username}".`);
       setResetTarget(null);
       setResetPassword('');
     } catch (err: any) {
@@ -468,11 +452,10 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <input
           className="input-control"
           type="password"
-          placeholder={newGeneratePassword ? 'Server sẽ tạo mật khẩu tạm' : 'Mật khẩu (>= 6 ký tự)'}
+          placeholder="Mật khẩu (>= 6 ký tự)"
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
           autoComplete="new-password"
-          disabled={newGeneratePassword}
         />
         <CustomSelect
           className="admin-role-select"
@@ -485,20 +468,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <label className="admin-check">
           <input
             type="checkbox"
-            checked={newGeneratePassword}
-            onChange={(e) => {
-              setNewGeneratePassword(e.target.checked);
-              if (e.target.checked) setNewMustChangePassword(true);
-            }}
-          />
-          Temp
-        </label>
-        <label className="admin-check">
-          <input
-            type="checkbox"
-            checked={newMustChangePassword || newGeneratePassword}
+            checked={newMustChangePassword}
             onChange={(e) => setNewMustChangePassword(e.target.checked)}
-            disabled={newGeneratePassword}
           />
           Đổi khi login
         </label>
@@ -771,33 +742,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         <label className="admin-check modal-check">
           <input
             type="checkbox"
-            checked={resetGeneratePassword}
-            onChange={(e) => {
-              setResetGeneratePassword(e.target.checked);
-              if (e.target.checked) setResetMustChangePassword(true);
-            }}
-          />
-          Tạo mật khẩu tạm
-        </label>
-        <label className="admin-check modal-check">
-          <input
-            type="checkbox"
-            checked={resetMustChangePassword || resetGeneratePassword}
+            checked={resetMustChangePassword}
             onChange={(e) => setResetMustChangePassword(e.target.checked)}
-            disabled={resetGeneratePassword}
           />
           Bắt đổi mật khẩu khi login
         </label>
-        {!resetGeneratePassword && (
-          <input
-            className="input-control"
-            type="password"
-            value={resetPassword}
-            onChange={(e) => setResetPassword(e.target.value)}
-            autoComplete="new-password"
-            autoFocus
-          />
-        )}
+        <input
+          className="input-control"
+          type="password"
+          value={resetPassword}
+          onChange={(e) => setResetPassword(e.target.value)}
+          autoComplete="new-password"
+          autoFocus
+        />
         <div className="modal-actions">
           <button type="button" className="btn" onClick={() => setResetTarget(null)}>
             Huỷ
@@ -811,30 +768,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     </div>
   ) : null;
 
-  const temporaryPasswordDialog = temporaryPassword ? (
-    <div className="modal-overlay" onClick={() => setTemporaryPassword(null)}>
-      <div className="modal-card" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <KeyRound size={16} className="logo-icon" />
-          <h3 className="modal-title">Mật khẩu tạm</h3>
-        </div>
-        <p className="modal-message">Mật khẩu tạm cho "{temporaryPassword.username}" chỉ hiển thị một lần.</p>
-        <div className="temp-password font-mono">{temporaryPassword.password}</div>
-        <div className="modal-actions">
-          <button type="button" className="btn btn-primary" onClick={() => setTemporaryPassword(null)}>
-            Đã lưu
-          </button>
-        </div>
-      </div>
-    </div>
-  ) : null;
-
   if (variant === 'page') {
     return (
       <>
         {dashboard}
         {resetDialog}
-        {temporaryPasswordDialog}
       </>
     );
   }
@@ -845,7 +783,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
         {dashboard}
       </div>
       {resetDialog}
-      {temporaryPasswordDialog}
     </>
   );
 };

@@ -46,10 +46,6 @@ function publicUser(u) {
   };
 }
 
-function generatedPassword() {
-  return crypto.randomBytes(9).toString('base64url');
-}
-
 function userListParams(query) {
   const page = Math.max(1, Number(query.page) || 1);
   const pageSize = Math.max(1, Math.min(Number(query.pageSize) || 10, 100));
@@ -120,13 +116,7 @@ router.get('/admin/users/:id', (req, res) => {
 // Create a new user
 router.post('/admin/users', async (req, res) => {
   try {
-    const { username, role = 'user', generatePassword = false, mustChangePassword = false } = req.body || {};
-    let { password } = req.body || {};
-    let temporaryPassword = null;
-    if (generatePassword) {
-      temporaryPassword = generatedPassword();
-      password = temporaryPassword;
-    }
+    const { username, password, role = 'user', mustChangePassword = false } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: 'Cần username và password.' });
     }
@@ -151,14 +141,13 @@ router.post('/admin/users', async (req, res) => {
       apiKeyEnc: '',
       model: '',
       role,
-      mustChangePassword: generatePassword || mustChangePassword ? 1 : 0,
+      mustChangePassword: mustChangePassword ? 1 : 0,
       approved: 1,
     };
     createUser(user);
-    audit(req, 'create_user', user, `role=${role}${user.mustChangePassword ? '; temporary password' : ''}`);
+    audit(req, 'create_user', user, `role=${role}${user.mustChangePassword ? '; must change password' : ''}`);
     return res.json({
       user: publicUser({ ...user, hasApiKey: 0, sessionCount: 0, transcriptCount: 0 }),
-      temporaryPassword,
     });
   } catch (err) {
     console.error('admin create user error:', err);
@@ -169,22 +158,16 @@ router.post('/admin/users', async (req, res) => {
 // Reset a user's password
 router.post('/admin/users/:id/reset-password', async (req, res) => {
   try {
-    const { generatePassword = false, mustChangePassword = false } = req.body || {};
-    let { password } = req.body || {};
-    let temporaryPassword = null;
-    if (generatePassword) {
-      temporaryPassword = generatedPassword();
-      password = temporaryPassword;
-    }
+    const { password, mustChangePassword = false } = req.body || {};
     if (typeof password !== 'string' || password.length < 6) {
       return res.status(400).json({ error: 'Password tối thiểu 6 ký tự.' });
     }
     const target = findUserById(req.params.id);
     if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
     const passwordHash = await bcrypt.hash(password, 10);
-    updateUser(target.id, { passwordHash, mustChangePassword: generatePassword || mustChangePassword ? 1 : 0 });
-    audit(req, 'reset_password', target, generatePassword || mustChangePassword ? 'temporary password' : '');
-    return res.json({ ok: true, temporaryPassword });
+    updateUser(target.id, { passwordHash, mustChangePassword: mustChangePassword ? 1 : 0 });
+    audit(req, 'reset_password', target, mustChangePassword ? 'must change password' : '');
+    return res.json({ ok: true });
   } catch (err) {
     console.error('admin reset-password error:', err);
     return res.status(500).json({ error: err.message || 'Đặt lại mật khẩu thất bại.' });
