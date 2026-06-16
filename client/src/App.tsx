@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTranslator } from './hooks/useTranslator';
 import { useSessions } from './hooks/useSessions';
 import { useRecorder } from './hooks/useRecorder';
@@ -556,6 +556,7 @@ interface AppShellProps {
 
 const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topbarTitle, topbarContent, children }) => {
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const adminCloseTimerRef = useRef<number | null>(null);
   const isHome = currentPath === '/';
   const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
   const isAdminUsers = currentPath === '/admin' || currentPath === '/admin/users';
@@ -563,9 +564,39 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
   const isAdminSettings = currentPath === '/admin/settings';
 
   const navigateAndClose = (path: string) => {
+    if (adminCloseTimerRef.current !== null) {
+      window.clearTimeout(adminCloseTimerRef.current);
+      adminCloseTimerRef.current = null;
+    }
     setAdminMenuOpen(false);
     onNavigate(path);
   };
+
+  const openAdminMenu = () => {
+    if (adminCloseTimerRef.current !== null) {
+      window.clearTimeout(adminCloseTimerRef.current);
+      adminCloseTimerRef.current = null;
+    }
+    setAdminMenuOpen(true);
+  };
+
+  const closeAdminMenuSoon = () => {
+    if (adminCloseTimerRef.current !== null) {
+      window.clearTimeout(adminCloseTimerRef.current);
+    }
+    adminCloseTimerRef.current = window.setTimeout(() => {
+      setAdminMenuOpen(false);
+      adminCloseTimerRef.current = null;
+    }, 180);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (adminCloseTimerRef.current !== null) {
+        window.clearTimeout(adminCloseTimerRef.current);
+      }
+    };
+  }, []);
 
   return (
     <div className="app-shell">
@@ -583,10 +614,12 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
           {user.isAdmin && (
             <div
               className="app-topbar-menu"
+              onPointerEnter={openAdminMenu}
+              onPointerLeave={closeAdminMenuSoon}
               onBlur={(e) => {
                 const nextFocus = e.relatedTarget;
                 if (!(nextFocus instanceof Node) || !e.currentTarget.contains(nextFocus)) {
-                  setAdminMenuOpen(false);
+                  closeAdminMenuSoon();
                 }
               }}
             >
@@ -594,6 +627,7 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
                 type="button"
                 className={`app-topbar-link ${isAdmin ? 'active' : ''}`}
                 onClick={() => setAdminMenuOpen((v) => !v)}
+                onFocus={openAdminMenu}
                 aria-haspopup="menu"
                 aria-expanded={adminMenuOpen}
               >
@@ -602,7 +636,13 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
                 <ChevronDown size={14} className={`app-topbar-chevron ${adminMenuOpen ? 'open' : ''}`} />
               </button>
               {adminMenuOpen && (
-                <div className="app-topbar-dropdown" role="menu" aria-label="Admin sections">
+                <div
+                  className="app-topbar-dropdown"
+                  role="menu"
+                  aria-label="Admin sections"
+                  onPointerEnter={openAdminMenu}
+                  onPointerLeave={closeAdminMenuSoon}
+                >
                   <button
                     type="button"
                     className={`app-topbar-dropdown-item ${isAdminUsers ? 'active' : ''}`}
@@ -791,7 +831,7 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
               color: 'var(--color-error)',
               lineHeight: 1.4,
               overflowWrap: 'anywhere',
-              background: 'rgba(239, 68, 68, 0.06)',
+              background: '#2a1118',
               padding: '0.5rem 0.75rem',
               borderRadius: '0.5rem',
               border: '1px solid rgba(239, 68, 68, 0.2)',

@@ -97,7 +97,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .app-topbar {
   position: relative;
-  z-index: 30;
+  z-index: 900;
   display: flex;
   align-items: center;
   gap: 0.75rem;
@@ -120,8 +120,7 @@ h1, h2, h3, h4, h5, h6 {
   flex: 0 1 auto;
   min-width: 0;
   max-width: max-content;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   padding-bottom: 0.15rem;
   scrollbar-width: thin;
   scrollbar-color: rgba(148, 163, 184, 0.35) transparent;
@@ -150,6 +149,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .app-topbar-menu {
   position: relative;
+  z-index: 910;
 }
 
 .app-topbar-link {
@@ -191,19 +191,20 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .app-topbar-dropdown {
-  position: fixed;
-  top: 3.65rem;
-  left: 9.25rem;
-  z-index: 35;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 950;
   min-width: 11rem;
   display: grid;
   gap: 0.2rem;
   padding: 0.35rem;
   border: 1px solid var(--border-color);
   border-radius: 0.7rem;
-  background: rgba(17, 22, 38, 0.98);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(18px);
+  overflow: hidden;
+  background: #111827 !important;
+  background-color: #111827 !important;
+  box-shadow: var(--shadow-premium);
 }
 
 .app-topbar-dropdown-item {
@@ -213,7 +214,7 @@ h1, h2, h3, h4, h5, h6 {
   width: 100%;
   border: 1px solid transparent;
   border-radius: 0.45rem;
-  background: transparent;
+  background: #111827 !important;
   color: var(--color-text-secondary);
   padding: 0.48rem 0.6rem;
   cursor: pointer;
@@ -227,8 +228,8 @@ h1, h2, h3, h4, h5, h6 {
 .app-topbar-dropdown-item.active,
 .app-topbar-dropdown-item:focus-visible {
   color: var(--color-text-primary);
-  border-color: rgba(34, 197, 94, 0.28);
-  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(99, 102, 241, 0.35) !important;
+  background: #172238 !important;
   outline: none;
 }
 
@@ -244,6 +245,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .app-topbar-settings {
   position: relative;
+  z-index: 910;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -450,12 +452,42 @@ h1, h2, h3, h4, h5, h6 {
   top: calc(100% + 0.6rem);
   right: 0;
   min-width: 320px;
-  z-index: 200;
+  z-index: 950;
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
   padding: 1rem;
-  animation: settings-pop-in 0.18s ease-out;
+  animation: none;
+  overflow: hidden;
+  opacity: 1;
+  background: #111827 !important;
+  background-color: #111827 !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.settings-popover.panel-card {
+  background: #111827 !important;
+  background-color: #111827 !important;
+  background-image: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.settings-popover .input-control,
+.settings-popover .topbar-icon-btn,
+.settings-popover .toggle-row {
+  background: #0f172a !important;
+  background-color: #0f172a !important;
+}
+
+.settings-popover .topbar-icon-btn:hover {
+  background: #172238 !important;
+}
+
+.settings-popover .slider {
+  background-color: #0f172a;
 }
 
 @keyframes settings-pop-in {
@@ -500,7 +532,7 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.25rem;
   padding: 0.6rem 0.7rem;
   border-radius: 0.55rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: #0f172a;
   border: 1px solid var(--border-color);
   color: var(--color-text-secondary);
   cursor: pointer;
@@ -522,12 +554,12 @@ h1, h2, h3, h4, h5, h6 {
 
 .settings-radio:hover {
   border-color: rgba(99, 102, 241, 0.35);
-  background: rgba(99, 102, 241, 0.05);
+  background: #172238;
 }
 
 .settings-radio.active {
   border-color: var(--color-accent-indigo);
-  background: rgba(99, 102, 241, 0.12);
+  background: #1e2a4a;
   box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.4);
 }
 
@@ -542,7 +574,7 @@ h1, h2, h3, h4, h5, h6 {
   align-items: center;
   gap: 0.6rem;
   padding: 0.6rem 0.7rem;
-  background: rgba(255, 255, 255, 0.02);
+  background: #0f172a;
   border: 1px solid var(--border-color);
   border-radius: 0.55rem;
 }
@@ -562,12 +594,12 @@ h1, h2, h3, h4, h5, h6 {
 
 .settings-keybind:hover {
   border-color: var(--color-accent-indigo);
-  background: rgba(99, 102, 241, 0.08);
+  background: #172238;
 }
 
 .settings-keybind.capturing {
   border-color: var(--color-warning);
-  background: rgba(245, 158, 11, 0.08);
+  background: #2a2211;
   animation: pulse 1.2s infinite;
 }
 
@@ -1951,9 +1983,6 @@ input:checked + .slider:before {
   .wave-container.topbar-wave {
     min-width: 6rem;
     margin: 0 0.25rem;
-  }
-  .app-topbar-dropdown {
-    left: 8.6rem;
   }
   .content-col {
     flex-direction: column;
