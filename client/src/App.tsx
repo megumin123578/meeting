@@ -573,10 +573,7 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLo
         >
           <Menu size={16} />
         </button>
-        <div className="app-sidebar-brand">
-          <Activity size={20} className="logo-icon" />
-          <span>SpeakLink</span>
-        </div>
+        
         <nav className="app-sidebar-nav">
           <button
             type="button"
