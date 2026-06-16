@@ -356,10 +356,60 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const handleStop =
     mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
   const isAdminPage = currentPath === '/admin' || currentPath.startsWith('/admin/');
+  const isTeamPage = currentPath === '/team';
   const adminSection =
     currentPath === '/admin/audit' ? 'audit' :
     currentPath === '/admin/settings' ? 'settings' :
     'users';
+
+  const appTopbarTitle = (
+    <div className="app-title-section app-topbar-title-section">
+      <h1 className="app-title app-topbar-title">SpeakLink</h1>
+    </div>
+  );
+
+  const appTopbarContent = (
+    <>
+      <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
+      <div className="app-topbar-settings">
+        <button
+          className="status-pill-group topbar-status"
+          onClick={() => setShowSettings((v) => !v)}
+          title="Trạng thái kết nối — bấm để mở cài đặt"
+        >
+          <span className={`status-pill ${keyDot}`}>Gemini</span>
+          <span className={`status-pill ${ttsDot}`}>TTS</span>
+        </button>
+        <button
+          className="topbar-icon-btn"
+          onClick={() => setShowSettings((v) => !v)}
+          title="Cài đặt"
+          aria-expanded={showSettings}
+        >
+          <SettingsIcon size={16} />
+        </button>
+
+        {showSettings && (
+          <SettingsPopover
+            apiKey={apiKey}
+            onSaveKey={saveApiKey}
+            isKeyValid={isKeyValid}
+            keyError={keyError}
+            onCheckKey={checkApiKey}
+            ttsStatus={ttsStatus}
+            onCheckTTS={checkEdgeTTS}
+            model={model}
+            inputStyle={inputStyle}
+            setInputStyle={setInputStyle}
+            pttKey={pttKey}
+            setPttKey={setPttKey}
+            onLogout={onLogout}
+            onClose={() => setShowSettings(false)}
+          />
+        )}
+      </div>
+    </>
+  );
 
   if (isAdminPage) {
     return (
@@ -412,6 +462,40 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     );
   }
 
+  if (isTeamPage) {
+    return (
+      <ConfirmProvider>
+        <AppShell
+          user={user}
+          currentPath={currentPath}
+          onNavigate={navigateTo}
+          onLogout={onLogout}
+          topbarTitle={appTopbarTitle}
+          topbarContent={appTopbarContent}
+        >
+          <div className="app-container team-mode-container">
+            <div className="team-empty-panel">
+              <Users size={34} className="logo-icon" />
+              <h2>Team</h2>
+              <p>No team workspace yet.</p>
+            </div>
+
+            {toastMessage && (
+              <div className="toast">
+                {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
+                  <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
+                ) : (
+                  <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+                )}
+                <span style={{ fontSize: '0.85rem' }}>{toastMessage}</span>
+              </div>
+            )}
+          </div>
+        </AppShell>
+      </ConfirmProvider>
+    );
+  }
+
   return (
     <ConfirmProvider>
     <AppShell
@@ -419,53 +503,8 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
       currentPath={currentPath}
       onNavigate={navigateTo}
       onLogout={onLogout}
-      topbarTitle={(
-        <div className="app-title-section app-topbar-title-section">
-          <h1 className="app-title app-topbar-title">SpeakLink</h1>
-        </div>
-      )}
-      topbarContent={(
-        <>
-          <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
-          <div className="app-topbar-settings">
-            <button
-              className="status-pill-group topbar-status"
-              onClick={() => setShowSettings((v) => !v)}
-              title="Trạng thái kết nối — bấm để mở cài đặt"
-            >
-              <span className={`status-pill ${keyDot}`}>Gemini</span>
-              <span className={`status-pill ${ttsDot}`}>TTS</span>
-            </button>
-            <button
-              className="topbar-icon-btn"
-              onClick={() => setShowSettings((v) => !v)}
-              title="Cài đặt"
-              aria-expanded={showSettings}
-            >
-              <SettingsIcon size={16} />
-            </button>
-
-            {showSettings && (
-              <SettingsPopover
-                apiKey={apiKey}
-                onSaveKey={saveApiKey}
-                isKeyValid={isKeyValid}
-                keyError={keyError}
-                onCheckKey={checkApiKey}
-                ttsStatus={ttsStatus}
-                onCheckTTS={checkEdgeTTS}
-                model={model}
-                inputStyle={inputStyle}
-                setInputStyle={setInputStyle}
-                pttKey={pttKey}
-                setPttKey={setPttKey}
-                onLogout={onLogout}
-                onClose={() => setShowSettings(false)}
-              />
-            )}
-          </div>
-        </>
-      )}
+      topbarTitle={appTopbarTitle}
+      topbarContent={appTopbarContent}
     >
     <div className="app-container">
       <div className="dashboard-grid">
@@ -555,21 +594,49 @@ interface AppShellProps {
 }
 
 const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topbarTitle, topbarContent, children }) => {
+  const [modeMenuOpen, setModeMenuOpen] = useState(false);
   const [adminMenuOpen, setAdminMenuOpen] = useState(false);
+  const modeCloseTimerRef = useRef<number | null>(null);
   const adminCloseTimerRef = useRef<number | null>(null);
   const isHome = currentPath === '/';
+  const isTeam = currentPath === '/team';
+  const isMode = isHome || isTeam;
+  const activeModeLabel = isTeam ? 'Team' : isHome ? 'Personal' : 'Personal';
   const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
   const isAdminUsers = currentPath === '/admin' || currentPath === '/admin/users';
   const isAdminAudit = currentPath === '/admin/audit';
   const isAdminSettings = currentPath === '/admin/settings';
 
   const navigateAndClose = (path: string) => {
+    if (modeCloseTimerRef.current !== null) {
+      window.clearTimeout(modeCloseTimerRef.current);
+      modeCloseTimerRef.current = null;
+    }
     if (adminCloseTimerRef.current !== null) {
       window.clearTimeout(adminCloseTimerRef.current);
       adminCloseTimerRef.current = null;
     }
+    setModeMenuOpen(false);
     setAdminMenuOpen(false);
     onNavigate(path);
+  };
+
+  const openModeMenu = () => {
+    if (modeCloseTimerRef.current !== null) {
+      window.clearTimeout(modeCloseTimerRef.current);
+      modeCloseTimerRef.current = null;
+    }
+    setModeMenuOpen(true);
+  };
+
+  const closeModeMenuSoon = () => {
+    if (modeCloseTimerRef.current !== null) {
+      window.clearTimeout(modeCloseTimerRef.current);
+    }
+    modeCloseTimerRef.current = window.setTimeout(() => {
+      setModeMenuOpen(false);
+      modeCloseTimerRef.current = null;
+    }, 180);
   };
 
   const openAdminMenu = () => {
@@ -592,6 +659,9 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
 
   useEffect(() => {
     return () => {
+      if (modeCloseTimerRef.current !== null) {
+        window.clearTimeout(modeCloseTimerRef.current);
+      }
       if (adminCloseTimerRef.current !== null) {
         window.clearTimeout(adminCloseTimerRef.current);
       }
@@ -603,14 +673,58 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
       <header className="app-topbar">
         {topbarTitle}
         <nav className="app-topbar-nav" aria-label="Primary navigation">
-          <button
-            type="button"
-            className={`app-topbar-link ${isHome ? 'active' : ''}`}
-            onClick={() => navigateAndClose('/')}
+          <div
+            className="app-topbar-menu"
+            onPointerEnter={openModeMenu}
+            onPointerLeave={closeModeMenuSoon}
+            onBlur={(e) => {
+              const nextFocus = e.relatedTarget;
+              if (!(nextFocus instanceof Node) || !e.currentTarget.contains(nextFocus)) {
+                closeModeMenuSoon();
+              }
+            }}
           >
-            <Activity size={16} />
-            <span>Workspace</span>
-          </button>
+            <button
+              type="button"
+              className={`app-topbar-link ${isMode ? 'active' : ''}`}
+              onClick={() => setModeMenuOpen((v) => !v)}
+              onFocus={openModeMenu}
+              aria-haspopup="menu"
+              aria-expanded={modeMenuOpen}
+            >
+              <Activity size={16} />
+              <span>{activeModeLabel}</span>
+              <ChevronDown size={14} className={`app-topbar-chevron ${modeMenuOpen ? 'open' : ''}`} />
+            </button>
+            {modeMenuOpen && (
+              <div
+                className="app-topbar-dropdown"
+                role="menu"
+                aria-label="Workspace modes"
+                onPointerEnter={openModeMenu}
+                onPointerLeave={closeModeMenuSoon}
+              >
+                <button
+                  type="button"
+                  className={`app-topbar-dropdown-item ${isHome ? 'active' : ''}`}
+                  onClick={() => navigateAndClose('/')}
+                  role="menuitem"
+                >
+                  <User size={14} />
+                  <span>Personal</span>
+                </button>
+                <button
+                  type="button"
+                  className={`app-topbar-dropdown-item ${isTeam ? 'active' : ''}`}
+                  onClick={() => navigateAndClose('/team')}
+                  role="menuitem"
+                >
+                  <Users size={14} />
+                  <span>Team</span>
+                </button>
+              </div>
+            )}
+          </div>
           {user.isAdmin && (
             <div
               className="app-topbar-menu"
