@@ -654,10 +654,12 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .sidebar-col {
+  position: relative;
+  z-index: 30;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  overflow: hidden;
+  overflow: visible;
   padding-right: 0.5rem;
   min-height: 0;
 }
@@ -1247,6 +1249,9 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Recording Station */
 .recording-station {
+  position: relative;
+  z-index: 120;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: 1rem;
@@ -1288,6 +1293,47 @@ h1, h2, h3, h4, h5, h6 {
   font-size: 0.7rem;
   color: var(--color-text-muted);
   padding-left: 0.15rem;
+}
+
+.mode-recording-select,
+.mode-source-select {
+  z-index: 80;
+}
+
+.custom-select-menu.mode-recording-menu,
+.custom-select-menu.mode-source-menu {
+  z-index: 500;
+  width: 100%;
+  min-width: 100%;
+  max-width: none;
+  background: #111827;
+  border-color: rgba(148, 163, 184, 0.45);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.72);
+  backdrop-filter: none;
+}
+
+.custom-select-menu.mode-source-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.custom-select-menu.mode-recording-menu {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.custom-select-menu.mode-recording-menu .custom-select-option,
+.custom-select-menu.mode-source-menu .custom-select-option {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  background: #111827;
+}
+
+.custom-select-menu.mode-recording-menu .custom-select-option:hover:not(:disabled),
+.custom-select-menu.mode-recording-menu .custom-select-option.active,
+.custom-select-menu.mode-source-menu .custom-select-option:hover:not(:disabled),
+.custom-select-menu.mode-source-menu .custom-select-option.active {
+  background: rgba(99, 102, 241, 0.24);
 }
 
 .cabin-interval-row {

@@ -47,8 +47,9 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
       <div className="mode-selector">
         <label className="mode-label">Chế độ thu âm</label>
         <CustomSelect
-          className="mode-custom-select"
+          className="mode-custom-select mode-recording-select"
           triggerClassName="model-select mode-select"
+          menuClassName="mode-recording-menu"
           ariaLabel="Chọn chế độ thu âm"
           value={mode}
           options={MODE_OPTIONS.map((opt) => ({
@@ -70,16 +71,19 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
         <div className="mode-selector">
           <label className="mode-label">Nguồn âm thanh</label>
           <CustomSelect
-            className="mode-custom-select"
+            className="mode-custom-select mode-source-select"
             triggerClassName="model-select mode-select"
+            menuClassName="mode-source-menu"
             ariaLabel="Chọn nguồn âm thanh"
             value={liveSource}
-            disabled={isActive}
             options={[
               { value: 'mic', label: 'Micro' },
               { value: 'tab', label: 'Âm thanh tab trình duyệt' },
             ]}
-            onChange={(value) => setLiveSource(value as 'mic' | 'tab')}
+            onChange={(value) => {
+              if (isActive) onStop();
+              setLiveSource(value as 'mic' | 'tab');
+            }}
           />
           <span className="mode-hint font-mono">
             {liveSource === 'tab'
