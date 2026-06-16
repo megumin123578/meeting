@@ -15,6 +15,8 @@ const {
   listUserSessionsForAdmin,
   createAuditLog,
   listAuditLogs,
+  getAppSettings,
+  updateAppSettings,
 } = require('../utils/db');
 const { requireAuth, requireAdmin, isAdminUser } = require('../utils/auth');
 
@@ -38,6 +40,7 @@ function publicUser(u) {
     transcriptCount: u.transcriptCount ?? 0,
     lastActiveAt: u.lastActiveAt || null,
     mustChangePassword: !!u.mustChangePassword,
+    approved: u.approved !== 0,
     isAdmin: role === 'admin',
     role,
   };
@@ -86,6 +89,24 @@ router.get('/admin/audit-logs', (req, res) => {
   res.json({ logs: listAuditLogs(req.query.limit).map((log) => ({ ...log, details: log.details || '' })) });
 });
 
+router.get('/admin/settings', (req, res) => {
+  res.json({ settings: getAppSettings() });
+});
+
+router.patch('/admin/settings', (req, res) => {
+  const patch = {};
+  if (typeof req.body?.publicRegistrationEnabled === 'boolean') {
+    patch.publicRegistrationEnabled = req.body.publicRegistrationEnabled;
+  }
+  if (typeof req.body?.requireAdminApproval === 'boolean') {
+    patch.requireAdminApproval = req.body.requireAdminApproval;
+  }
+  const settings = updateAppSettings(patch);
+  const changed = Object.entries(patch).map(([key, value]) => `${key}=${value}`).join('; ');
+  if (changed) audit(req, 'update_settings', null, changed);
+  res.json({ settings });
+});
+
 router.get('/admin/users/:id', (req, res) => {
   const target = findUserById(req.params.id);
   if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
@@ -131,6 +152,7 @@ router.post('/admin/users', async (req, res) => {
       model: '',
       role,
       mustChangePassword: generatePassword || mustChangePassword ? 1 : 0,
+      approved: 1,
     };
     createUser(user);
     audit(req, 'create_user', user, `role=${role}${user.mustChangePassword ? '; temporary password' : ''}`);
@@ -184,6 +206,22 @@ router.patch('/admin/users/:id/role', (req, res) => {
   }
   const updated = updateUser(target.id, { role });
   audit(req, 'change_role', updated, `${target.role || 'user'} -> ${role}`);
+  return res.json({ user: publicUser(findUserStatsForAdmin(updated.id) || { ...updated, hasApiKey: !!updated.apiKeyEnc }) });
+});
+
+router.patch('/admin/users/:id/approval', (req, res) => {
+  const { approved } = req.body || {};
+  const nextApproved = approved === true || approved === 1;
+  const target = findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
+  if (target.id === req.user.id && !nextApproved) {
+    return res.status(400).json({ error: 'Không thể khoá chính tài khoản của bạn.' });
+  }
+  if (isAdminUser(target) && !nextApproved && countAdmins() <= 1) {
+    return res.status(400).json({ error: 'Không thể khoá admin cuối cùng.' });
+  }
+  const updated = updateUser(target.id, { approved: nextApproved ? 1 : 0 });
+  audit(req, nextApproved ? 'approve_user' : 'suspend_user', updated);
   return res.json({ user: publicUser(findUserStatsForAdmin(updated.id) || { ...updated, hasApiKey: !!updated.apiKeyEnc }) });
 });
 

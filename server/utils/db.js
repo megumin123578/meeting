@@ -21,7 +21,8 @@ db.exec(`
 	    apiKeyEnc    TEXT NOT NULL DEFAULT '',
 	    model        TEXT NOT NULL DEFAULT '',
 	    role         TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
-	    mustChangePassword INTEGER NOT NULL DEFAULT 0
+	    mustChangePassword INTEGER NOT NULL DEFAULT 0,
+	    approved     INTEGER NOT NULL DEFAULT 1
 	  );
 
   CREATE TABLE IF NOT EXISTS sessions (
@@ -58,6 +59,12 @@ db.exec(`
 	    createdAt      TEXT NOT NULL
 	  );
 	  CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(createdAt DESC);
+
+	  CREATE TABLE IF NOT EXISTS app_settings (
+	    key       TEXT PRIMARY KEY,
+	    value     TEXT NOT NULL,
+	    updatedAt TEXT NOT NULL
+	  );
 	`);
 
 const userCols = db.prepare('PRAGMA table_info(users)').all().map((col) => col.name);
@@ -66,6 +73,9 @@ if (!userCols.includes('role')) {
 }
 if (!userCols.includes('mustChangePassword')) {
   db.exec('ALTER TABLE users ADD COLUMN mustChangePassword INTEGER NOT NULL DEFAULT 0');
+}
+if (!userCols.includes('approved')) {
+  db.exec('ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1');
 }
 
 // One-time migration from legacy users.json (if present)
@@ -80,8 +90,8 @@ if (!userCols.includes('mustChangePassword')) {
       return;
     }
     const insert = db.prepare(`
-      INSERT OR IGNORE INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword)
-      VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword)
+      INSERT OR IGNORE INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword, approved)
+      VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword, @approved)
     `);
     const tx = db.transaction((rows) => {
       for (const u of rows) {
@@ -94,6 +104,7 @@ if (!userCols.includes('mustChangePassword')) {
           model: u.model || '',
           role: u.role === 'admin' ? 'admin' : 'user',
           mustChangePassword: u.mustChangePassword ? 1 : 0,
+          approved: u.approved === 0 ? 0 : 1,
         });
       }
     });
@@ -108,8 +119,8 @@ if (!userCols.includes('mustChangePassword')) {
 const findByUsernameStmt = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE');
 const findByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
 const insertStmt = db.prepare(`
-  INSERT INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword)
-  VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword)
+  INSERT INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword, approved)
+  VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword, @approved)
 `);
 
 function findUserByUsername(username) {
@@ -130,10 +141,11 @@ function createUser(user) {
     model: user.model || '',
     role: user.role === 'admin' ? 'admin' : 'user',
     mustChangePassword: user.mustChangePassword ? 1 : 0,
+    approved: user.approved === 0 ? 0 : 1,
   });
 }
 
-const ALLOWED_PATCH_COLS = new Set(['username', 'passwordHash', 'apiKeyEnc', 'model', 'role', 'mustChangePassword']);
+const ALLOWED_PATCH_COLS = new Set(['username', 'passwordHash', 'apiKeyEnc', 'model', 'role', 'mustChangePassword', 'approved']);
 
 function updateUser(id, patch) {
   const cols = Object.keys(patch).filter((k) => ALLOWED_PATCH_COLS.has(k));
@@ -157,9 +169,9 @@ const USER_SORTS = {
   role: 'role',
 };
 const deleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?');
-const countAdminsStmt = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'");
+const countAdminsStmt = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin' AND approved <> 0");
 const userStatsSelect = `
-  SELECT u.id, u.username, u.createdAt, u.model, u.role, u.mustChangePassword,
+  SELECT u.id, u.username, u.createdAt, u.model, u.role, u.mustChangePassword, u.approved,
          (CASE WHEN u.apiKeyEnc <> '' THEN 1 ELSE 0 END) AS hasApiKey,
          (SELECT COUNT(*) FROM sessions s WHERE s.userId = u.id) AS sessionCount,
          (SELECT COUNT(*) FROM transcripts t WHERE t.userId = u.id) AS transcriptCount,
@@ -247,6 +259,43 @@ function listAuditLogs(limit = 50) {
   return listAuditLogsStmt.all(Math.max(1, Math.min(Number(limit) || 50, 100)));
 }
 
+// ---- App settings ----
+const DEFAULT_APP_SETTINGS = {
+  publicRegistrationEnabled: true,
+  requireAdminApproval: true,
+};
+const getSettingStmt = db.prepare('SELECT value FROM app_settings WHERE key = ?');
+const upsertSettingStmt = db.prepare(`
+  INSERT INTO app_settings (key, value, updatedAt)
+  VALUES (@key, @value, @updatedAt)
+  ON CONFLICT(key) DO UPDATE SET value = excluded.value, updatedAt = excluded.updatedAt
+`);
+
+function boolSetting(key) {
+  const row = getSettingStmt.get(key);
+  if (!row) return DEFAULT_APP_SETTINGS[key];
+  return row.value === 'true';
+}
+
+function getAppSettings() {
+  return {
+    publicRegistrationEnabled: boolSetting('publicRegistrationEnabled'),
+    requireAdminApproval: boolSetting('requireAdminApproval'),
+  };
+}
+
+function updateAppSettings(patch = {}) {
+  const allowed = Object.keys(DEFAULT_APP_SETTINGS);
+  const now = new Date().toISOString();
+  const tx = db.transaction((entries) => {
+    for (const key of entries) {
+      upsertSettingStmt.run({ key, value: String(!!patch[key]), updatedAt: now });
+    }
+  });
+  tx(allowed.filter((key) => typeof patch[key] === 'boolean'));
+  return getAppSettings();
+}
+
 // ---- Sessions ----
 const insertSessionStmt = db.prepare(`
   INSERT INTO sessions (id, userId, title, createdAt, updatedAt)
@@ -325,6 +374,8 @@ module.exports = {
   listUserSessionsForAdmin,
   createAuditLog,
   listAuditLogs,
+  getAppSettings,
+  updateAppSettings,
   createSession,
   listSessions,
   findSession,

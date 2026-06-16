@@ -20,8 +20,8 @@ async function ensureAdminUser() {
   for (const username of usernames) {
     const existing = findUserByUsername(username);
     if (existing) {
-      if (existing.role !== 'admin') {
-        updateUser(existing.id, { role: 'admin' });
+      if (existing.role !== 'admin' || existing.approved === 0) {
+        updateUser(existing.id, { role: 'admin', approved: 1 });
         console.log(`[admin] Promoted "${username}" to admin from ADMIN_USERNAME.`);
       }
       continue;
@@ -44,6 +44,7 @@ async function ensureAdminUser() {
       apiKeyEnc: '',
       model: '',
       role: 'admin',
+      approved: 1,
     });
     console.log(`[admin] Seeded admin user "${username}".`);
   }

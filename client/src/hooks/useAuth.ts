@@ -6,6 +6,7 @@ export interface AuthUser {
   role?: 'admin' | 'user';
   isAdmin?: boolean;
   mustChangePassword?: boolean;
+  approved?: boolean;
 }
 
 const TOKEN_KEY = 'auth_token';
@@ -76,9 +77,11 @@ export const useAuth = () => {
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Đăng ký thất bại.');
-    persistToken(data.token);
-    setUser(data.user);
-    return data.user as AuthUser;
+    if (data.token && data.user) {
+      persistToken(data.token);
+      setUser(data.user);
+    }
+    return data;
   }, []);
 
   const resetPassword = useCallback(async (username: string, password: string) => {

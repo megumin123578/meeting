@@ -42,6 +42,7 @@ function requireAuth(req, res, next) {
     const payload = verifyToken(token);
     const user = findUserById(payload.sub);
     if (!user) return res.status(401).json({ error: 'User not found.' });
+    if (user.approved === 0) return res.status(403).json({ error: 'Tài khoản đang chờ admin duyệt.' });
     req.user = user;
     next();
   } catch (err) {

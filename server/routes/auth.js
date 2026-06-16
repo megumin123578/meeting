@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
-const { findUserByUsername, findUserById, createUser, updateUser } = require('../utils/db');
+const { findUserByUsername, findUserById, createUser, updateUser, getAppSettings } = require('../utils/db');
 const { signToken, requireAuth, isAdminUser } = require('../utils/auth');
 
 const router = express.Router();
@@ -16,11 +16,16 @@ function publicAuthUser(user) {
     role: user.role || 'user',
     isAdmin: isAdminUser(user),
     mustChangePassword: !!user.mustChangePassword,
+    approved: user.approved !== 0,
   };
 }
 
 router.post('/auth/register', async (req, res) => {
   try {
+    const settings = getAppSettings();
+    if (!settings.publicRegistrationEnabled) {
+      return res.status(403).json({ error: 'Đăng ký công khai đang tắt. Vui lòng liên hệ admin.' });
+    }
     const { username, password } = req.body || {};
     if (!username || !password) {
       return res.status(400).json({ error: 'Cần username và password.' });
@@ -45,10 +50,18 @@ router.post('/auth/register', async (req, res) => {
       model: '',
       role: 'user',
       mustChangePassword: 0,
+      approved: settings.requireAdminApproval ? 0 : 1,
     };
     createUser(user);
-    const token = signToken(user);
-    return res.json({ token, user: publicAuthUser(user) });
+    if (!settings.requireAdminApproval) {
+      const token = signToken(user);
+      return res.json({ token, user: publicAuthUser({ ...user, approved: 1 }) });
+    }
+    return res.json({
+      ok: true,
+      pendingApproval: true,
+      message: 'Tài khoản đã được tạo. Vui lòng chờ admin duyệt trước khi đăng nhập.',
+    });
   } catch (err) {
     console.error('register error:', err);
     return res.status(500).json({ error: err.message || 'Đăng ký thất bại.' });
@@ -68,6 +81,9 @@ router.post('/auth/login', async (req, res) => {
     const ok = await bcrypt.compare(password, user.passwordHash);
     if (!ok) {
       return res.status(401).json({ error: 'Username hoặc password không đúng.' });
+    }
+    if (user.approved === 0) {
+      return res.status(403).json({ error: 'Tài khoản đang chờ admin duyệt.' });
     }
     const token = signToken(user);
     return res.json({ token, user: publicAuthUser(user) });

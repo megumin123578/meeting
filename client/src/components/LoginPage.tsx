@@ -44,6 +44,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin, onRegister, onRes
         await onLogin(username.trim(), password);
       } else if (mode === 'register') {
         await onRegister(username.trim(), password);
+        setInfo('Đã tạo tài khoản. Vui lòng chờ admin duyệt trước khi đăng nhập.');
+        setPassword('');
+        setConfirmPassword('');
+        setMode('login');
       } else {
         await onReset(username.trim(), password);
         setInfo('Đã đổi mật khẩu. Bạn có thể đăng nhập bằng mật khẩu mới.');

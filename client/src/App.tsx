@@ -14,7 +14,7 @@ import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
-import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, Menu } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, Menu } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
@@ -383,7 +383,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
                 onClose={() => navigateTo('/')}
                 onShowToast={showToast}
                 section={adminSection}
-                onNavigate={(path) => navigateTo(path)}
                 variant="page"
               />
             ) : (
@@ -553,6 +552,9 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLo
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('app_sidebar_collapsed') === 'true');
   const isHome = currentPath === '/';
   const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
+  const isAdminUsers = currentPath === '/admin' || currentPath === '/admin/users';
+  const isAdminAudit = currentPath === '/admin/audit';
+  const isAdminSettings = currentPath === '/admin/settings';
 
   useEffect(() => {
     localStorage.setItem('app_sidebar_collapsed', String(sidebarCollapsed));
@@ -561,6 +563,16 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLo
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="app-sidebar" aria-label="Primary navigation">
+        <button
+          type="button"
+          className="app-sidebar-toggle app-sidebar-toggle-rail"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          title={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
+          aria-label={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
+          aria-expanded={!sidebarCollapsed}
+        >
+          <Menu size={16} />
+        </button>
         <div className="app-sidebar-brand">
           <Activity size={20} className="logo-icon" />
           <span>SpeakLink</span>
@@ -575,14 +587,42 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLo
             <span>Workspace</span>
           </button>
           {user.isAdmin && (
-            <button
-              type="button"
-              className={`app-sidebar-link ${isAdmin ? 'active' : ''}`}
-              onClick={() => onNavigate('/admin/users')}
-            >
-              <ShieldCheck size={16} />
-              <span>Admin</span>
-            </button>
+            <div className={`app-sidebar-group ${isAdmin ? 'active' : ''}`}>
+              <button
+                type="button"
+                className={`app-sidebar-link ${isAdmin ? 'active' : ''}`}
+                onClick={() => onNavigate('/admin/users')}
+              >
+                <ShieldCheck size={16} />
+                <span>Admin</span>
+              </button>
+              <div className="app-sidebar-subnav" aria-label="Admin sections">
+                <button
+                  type="button"
+                  className={`app-sidebar-sublink ${isAdminUsers ? 'active' : ''}`}
+                  onClick={() => onNavigate('/admin/users')}
+                >
+                  <Users size={14} />
+                  <span>Users</span>
+                </button>
+                <button
+                  type="button"
+                  className={`app-sidebar-sublink ${isAdminAudit ? 'active' : ''}`}
+                  onClick={() => onNavigate('/admin/audit')}
+                >
+                  <ClipboardList size={14} />
+                  <span>Audit</span>
+                </button>
+                <button
+                  type="button"
+                  className={`app-sidebar-sublink ${isAdminSettings ? 'active' : ''}`}
+                  onClick={() => onNavigate('/admin/settings')}
+                >
+                  <SettingsIcon size={14} />
+                  <span>Settings</span>
+                </button>
+              </div>
+            </div>
           )}
         </nav>
         <div className="app-sidebar-footer">
@@ -597,16 +637,6 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLo
         </div>
       </aside>
       <main className="app-main">
-        <button
-          type="button"
-          className="app-sidebar-toggle app-sidebar-toggle-rail"
-          onClick={() => setSidebarCollapsed((v) => !v)}
-          title={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
-          aria-label={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
-          aria-expanded={!sidebarCollapsed}
-        >
-          <Menu size={16} />
-        </button>
         {children}
       </main>
     </div>

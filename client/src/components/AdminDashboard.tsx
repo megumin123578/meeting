@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, RefreshCw, Trash2, KeyRound, UserPlus, ShieldCheck, Loader2 } from 'lucide-react';
+import { X, RefreshCw, Trash2, KeyRound, UserPlus, ShieldCheck, Loader2, CheckCircle2, Ban } from 'lucide-react';
 import { useConfirm } from './ConfirmDialog';
 import { CustomSelect } from './CustomSelect';
 
@@ -18,6 +18,7 @@ export interface AdminUser {
   transcriptCount: number;
   lastActiveAt: string | null;
   mustChangePassword: boolean;
+  approved: boolean;
   isAdmin: boolean;
   role: UserRole;
 }
@@ -39,13 +40,17 @@ interface AuditLog {
   createdAt: string;
 }
 
+interface AdminSettings {
+  publicRegistrationEnabled: boolean;
+  requireAdminApproval: boolean;
+}
+
 interface AdminDashboardProps {
   token: string;
   currentUserId: string;
   onClose: () => void;
   onShowToast: (message: string) => void;
   section?: AdminSection;
-  onNavigate?: (path: string) => void;
   variant?: 'modal' | 'page';
 }
 
@@ -74,6 +79,12 @@ const actionLabel = (action: string) => {
       return 'Đặt lại mật khẩu';
     case 'change_role':
       return 'Đổi vai trò';
+    case 'approve_user':
+      return 'Duyệt user';
+    case 'suspend_user':
+      return 'Khoá user';
+    case 'update_settings':
+      return 'Đổi settings';
     default:
       return action;
   }
@@ -98,7 +109,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onClose,
   onShowToast,
   section = 'users',
-  onNavigate,
   variant = 'modal',
 }) => {
   const confirm = useConfirm();
@@ -108,6 +118,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const [selectedSessions, setSelectedSessions] = useState<AdminSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [auditLoading, setAuditLoading] = useState(true);
+  const [settings, setSettings] = useState<AdminSettings | null>(null);
+  const [settingsLoading, setSettingsLoading] = useState(true);
+  const [savingSetting, setSavingSetting] = useState<keyof AdminSettings | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [resetTarget, setResetTarget] = useState<AdminUser | null>(null);
@@ -177,6 +190,20 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
     }
   }, [authHeaders, onShowToast]);
 
+  const loadSettings = useCallback(async () => {
+    setSettingsLoading(true);
+    try {
+      const res = await fetch('/api/admin/settings', { headers: authHeaders() });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'settings failed');
+      setSettings(data.settings);
+    } catch {
+      onShowToast('❌ Không tải được admin settings.');
+    } finally {
+      setSettingsLoading(false);
+    }
+  }, [authHeaders, onShowToast]);
+
   const loadUserDetail = useCallback(
     async (id: string) => {
       setDetailLoading(true);
@@ -198,13 +225,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   const refreshAll = useCallback(() => {
     loadUsers();
     loadAuditLogs();
+    loadSettings();
     if (selectedUser) loadUserDetail(selectedUser.id);
-  }, [loadAuditLogs, loadUserDetail, loadUsers, selectedUser]);
+  }, [loadAuditLogs, loadSettings, loadUserDetail, loadUsers, selectedUser]);
 
   useEffect(() => {
     loadUsers();
     loadAuditLogs();
-  }, [loadAuditLogs, loadUsers]);
+    loadSettings();
+  }, [loadAuditLogs, loadSettings, loadUsers]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -222,10 +251,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   useEffect(() => {
     setPage(1);
   }, [query, roleFilter, pageSize, sortBy, sortDir]);
-
-  const goAdmin = (next: AdminSection) => {
-    onNavigate?.(`/admin/${next}`);
-  };
 
   const sortUsers = (nextSortBy: UserSortBy) => {
     if (sortBy === nextSortBy) {
@@ -291,6 +316,47 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onShowToast(`❌ ${err.message || 'Đổi vai trò thất bại.'}`);
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const handleApprovalChange = async (u: AdminUser, approved: boolean) => {
+    if (u.approved === approved) return;
+    setBusyId(u.id);
+    try {
+      const res = await fetch(`/api/admin/users/${u.id}/approval`, {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify({ approved }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Cập nhật trạng thái thất bại.');
+      setUsers((prev) => prev.map((x) => (x.id === u.id ? { ...x, ...data.user } : x)));
+      if (selectedUser?.id === u.id) loadUserDetail(u.id);
+      loadAuditLogs();
+      onShowToast(approved ? `✅ Đã duyệt "${u.username}".` : `⛔ Đã khoá "${u.username}".`);
+    } catch (err: any) {
+      onShowToast(`❌ ${err.message || 'Cập nhật trạng thái thất bại.'}`);
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const updateSetting = async (key: keyof AdminSettings, value: boolean) => {
+    setSavingSetting(key);
+    try {
+      const res = await fetch('/api/admin/settings', {
+        method: 'PATCH',
+        headers: authHeaders(true),
+        body: JSON.stringify({ [key]: value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Lưu setting thất bại.');
+      setSettings(data.settings);
+      loadAuditLogs();
+    } catch (err: any) {
+      onShowToast(`❌ ${err.message || 'Lưu setting thất bại.'}`);
+    } finally {
+      setSavingSetting(null);
     }
   };
 
@@ -387,18 +453,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             <X size={16} />
           </button>
         </div>
-      </div>
-
-      <div className="admin-tabs">
-        <button className={`admin-tab ${section === 'users' ? 'active' : ''}`} onClick={() => goAdmin('users')}>
-          Users
-        </button>
-        <button className={`admin-tab ${section === 'audit' ? 'active' : ''}`} onClick={() => goAdmin('audit')}>
-          Audit
-        </button>
-        <button className={`admin-tab ${section === 'settings' ? 'active' : ''}`} onClick={() => goAdmin('settings')}>
-          Settings
-        </button>
       </div>
 
       {section === 'users' && (
@@ -531,8 +585,33 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
                     <td className="num">{u.sessionCount}</td>
                     <td className="num">{u.transcriptCount}</td>
                     <td>{u.hasApiKey ? '✓' : '-'}</td>
-                    <td>{u.mustChangePassword ? <span className="admin-badge user">đổi mật khẩu</span> : '-'}</td>
+                    <td>
+                      {u.approved ? (
+                        u.mustChangePassword ? <span className="admin-badge user">đổi mật khẩu</span> : <span className="admin-badge approved">approved</span>
+                      ) : (
+                        <span className="admin-badge pending">chờ duyệt</span>
+                      )}
+                    </td>
                     <td className="actions-col">
+                      {u.approved ? (
+                        <button
+                          className="icon-action"
+                          title={isSelf ? 'Không thể khoá chính bạn' : 'Khoá tài khoản'}
+                          onClick={() => handleApprovalChange(u, false)}
+                          disabled={isSelf || busyId === u.id}
+                        >
+                          <Ban size={14} />
+                        </button>
+                      ) : (
+                        <button
+                          className="icon-action success"
+                          title="Duyệt tài khoản"
+                          onClick={() => handleApprovalChange(u, true)}
+                          disabled={busyId === u.id}
+                        >
+                          <CheckCircle2 size={14} />
+                        </button>
+                      )}
                       <button
                         className="icon-action"
                         title="Đặt lại mật khẩu"
@@ -579,6 +658,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
               <div className="admin-detail-stats">
                 <span><strong>{selectedUser.username}</strong></span>
                 <span className={`admin-badge ${selectedUser.role === 'admin' ? '' : 'user'}`}>{selectedUser.role}</span>
+                <span className={`admin-badge ${selectedUser.approved ? 'approved' : 'pending'}`}>
+                  {selectedUser.approved ? 'approved' : 'chờ duyệt'}
+                </span>
                 {selectedUser.mustChangePassword && <span className="admin-badge user">đổi mật khẩu khi login</span>}
                 <span>{selectedUser.sessionCount} phiên</span>
                 <span>{selectedUser.transcriptCount} đoạn dịch</span>
@@ -636,20 +718,41 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       {section === 'settings' && (
         <section className="admin-detail-panel admin-section-full">
           <div className="admin-section-header">
-            <h3>Admin settings</h3>
+            <h3>Cài đặt quản trị</h3>
+            {settingsLoading && <Loader2 size={14} className="animate-spin" />}
           </div>
           <div className="admin-settings-list">
             <div>
-              <strong>Bootstrap admins</strong>
-              <span className="admin-dim">Configure initial admins in server/.env with ADMIN_USERNAME. Runtime admin access now comes from database roles.</span>
+              <strong>Đăng ký công khai</strong>
+              <span className="admin-dim">Cho phép người dùng tự tạo tài khoản từ trang đăng nhập.</span>
+              <label className="admin-switch">
+                <input
+                  type="checkbox"
+                  checked={!!settings?.publicRegistrationEnabled}
+                  disabled={!settings || savingSetting === 'publicRegistrationEnabled'}
+                  onChange={(e) => updateSetting('publicRegistrationEnabled', e.target.checked)}
+                />
+                <span className="admin-switch-track" aria-hidden="true" />
+                <span>{settings?.publicRegistrationEnabled ? 'Đang bật' : 'Đang tắt'}</span>
+              </label>
             </div>
             <div>
-              <strong>Temporary passwords</strong>
-              <span className="admin-dim">Generated passwords are shown once. Users marked for password change must update their password after login.</span>
+              <strong>Yêu cầu admin duyệt</strong>
+              <span className="admin-dim">Tài khoản tự đăng ký phải được admin duyệt trước khi đăng nhập.</span>
+              <label className="admin-switch">
+                <input
+                  type="checkbox"
+                  checked={!!settings?.requireAdminApproval}
+                  disabled={!settings || savingSetting === 'requireAdminApproval'}
+                  onChange={(e) => updateSetting('requireAdminApproval', e.target.checked)}
+                />
+                <span className="admin-switch-track" aria-hidden="true" />
+                <span>{settings?.requireAdminApproval ? 'Bắt buộc duyệt' : 'Không cần duyệt'}</span>
+              </label>
             </div>
             <div>
-              <strong>Pagination</strong>
-              <span className="admin-dim">User search, role filtering, sorting, and pagination are handled by the server.</span>
+              <strong>Admin khởi tạo</strong>
+              <span className="admin-dim">Admin ban đầu vẫn lấy từ server/.env bằng ADMIN_USERNAME. Quyền truy cập khi chạy app được quản lý bằng vai trò trong database.</span>
             </div>
           </div>
         </section>

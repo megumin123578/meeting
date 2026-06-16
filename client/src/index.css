@@ -89,14 +89,15 @@ h1, h2, h3, h4, h5, h6 {
 
 /* Base Layout */
 .app-shell {
+  --sidebar-width: 220px;
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   transition: grid-template-columns 0.18s ease;
 }
 
 .app-shell.sidebar-collapsed {
-  grid-template-columns: 44px minmax(0, 1fr);
+  --sidebar-width: 44px;
 }
 
 .app-sidebar {
@@ -105,7 +106,7 @@ h1, h2, h3, h4, h5, h6 {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  padding: 1rem 0.75rem;
+  padding: 3.5rem 0.75rem 1rem;
   border-right: 1px solid var(--border-color);
   background: rgba(11, 15, 26, 0.92);
 }
@@ -123,6 +124,7 @@ h1, h2, h3, h4, h5, h6 {
 
 .app-sidebar-brand span,
 .app-sidebar-link span,
+.app-sidebar-sublink span,
 .app-sidebar-user span {
   transition: opacity 0.12s ease;
 }
@@ -136,8 +138,8 @@ h1, h2, h3, h4, h5, h6 {
   height: 2rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--color-text-secondary);
+  background: rgba(17, 24, 39, 0.96);
+  color: var(--color-text-primary);
   cursor: pointer;
 }
 
@@ -147,16 +149,26 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .app-sidebar-toggle-rail {
-  position: fixed;
+  position: absolute;
   top: 0.75rem;
-  left: 0.38rem;
-  z-index: 900;
+  right: 0.75rem;
+  z-index: 2;
+  transition: right 0.18s ease;
+}
+
+.sidebar-collapsed .app-sidebar-toggle-rail {
+  right: 0.38rem;
 }
 
 .app-sidebar-nav {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
+}
+
+.app-sidebar-group {
+  display: grid;
+  gap: 0.25rem;
 }
 
 .app-sidebar-link {
@@ -185,6 +197,37 @@ h1, h2, h3, h4, h5, h6 {
 .app-sidebar-link.compact {
   padding: 0.5rem 0.6rem;
   font-size: 0.8rem;
+}
+
+.app-sidebar-subnav {
+  display: grid;
+  gap: 0.2rem;
+  margin-left: 0.8rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(148, 163, 184, 0.18);
+}
+
+.app-sidebar-sublink {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--color-text-muted);
+  padding: 0.42rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.app-sidebar-sublink:hover,
+.app-sidebar-sublink.active {
+  color: var(--color-text-primary);
+  border-color: rgba(34, 197, 94, 0.28);
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .app-sidebar-footer {
@@ -222,11 +265,11 @@ h1, h2, h3, h4, h5, h6 {
   padding: 0;
   border-right: 1px solid var(--border-color);
   opacity: 1;
-  pointer-events: none;
 }
 
-.sidebar-collapsed .app-sidebar > * {
+.sidebar-collapsed .app-sidebar > :not(.app-sidebar-toggle-rail) {
   opacity: 0;
+  pointer-events: none;
 }
 
 .app-container {
@@ -1860,8 +1903,27 @@ input:checked + .slider:before {
   .app-sidebar-nav {
     flex-direction: row;
     flex: 1;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .app-sidebar-group {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+  .app-sidebar-subnav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
   }
   .app-sidebar-link {
+    width: auto;
+    white-space: nowrap;
+  }
+  .app-sidebar-sublink {
     width: auto;
     white-space: nowrap;
   }
@@ -1875,7 +1937,7 @@ input:checked + .slider:before {
     max-width: 160px;
   }
   .app-shell.sidebar-collapsed {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }
   .sidebar-collapsed .app-sidebar {
     position: sticky;
@@ -2039,30 +2101,6 @@ input:checked + .slider:before {
   font-size: 1.1rem;
 }
 
-.admin-tabs {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.admin-tab {
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--color-text-secondary);
-  padding: 0.55rem 0.75rem;
-  cursor: pointer;
-  font-size: 0.85rem;
-}
-
-.admin-tab:hover,
-.admin-tab.active {
-  color: var(--color-text-primary);
-  border-bottom-color: var(--color-accent-indigo);
-}
-
 .admin-create-row {
   display: flex;
   gap: 0.5rem;
@@ -2216,6 +2254,16 @@ input:checked + .slider:before {
   color: var(--color-text-muted);
 }
 
+.admin-badge.approved {
+  background: rgba(34, 197, 94, 0.14);
+  color: var(--color-success, #22c55e);
+}
+
+.admin-badge.pending {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--color-warning, #f59e0b);
+}
+
 .admin-user-link {
   border: none;
   background: transparent;
@@ -2281,6 +2329,11 @@ input:checked + .slider:before {
 .icon-action.danger:hover:not(:disabled) {
   color: #ef4444;
   border-color: rgba(239, 68, 68, 0.5);
+}
+
+.icon-action.success:hover:not(:disabled) {
+  color: var(--color-success, #22c55e);
+  border-color: rgba(34, 197, 94, 0.5);
 }
 
 .icon-action:disabled {
@@ -2405,6 +2458,67 @@ input:checked + .slider:before {
   padding: 0.75rem;
   border: 1px solid var(--border-color);
   border-radius: 0.5rem;
+}
+
+.admin-switch {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  color: var(--color-text-secondary);
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.admin-switch input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.admin-switch-track {
+  position: relative;
+  width: 2.4rem;
+  height: 1.3rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.admin-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 0.14rem;
+  left: 0.14rem;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--color-text-secondary);
+  transition: transform 0.15s, background 0.15s;
+}
+
+.admin-switch input:checked + .admin-switch-track {
+  border-color: rgba(99, 102, 241, 0.55);
+  background: rgba(99, 102, 241, 0.35);
+}
+
+.admin-switch input:checked + .admin-switch-track::after {
+  transform: translateX(1.1rem);
+  background: var(--color-text-primary);
+}
+
+.admin-switch input:focus-visible + .admin-switch-track {
+  outline: 2px solid rgba(99, 102, 241, 0.55);
+  outline-offset: 2px;
+}
+
+.admin-switch input:disabled + .admin-switch-track,
+.admin-switch input:disabled + .admin-switch-track + span {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .temp-password {
