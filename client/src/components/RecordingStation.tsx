@@ -1,6 +1,7 @@
 import React from 'react';
 import { Mic } from 'lucide-react';
 import type { RecordingMode } from '../App';
+import { CustomSelect } from './CustomSelect';
 
 interface RecordingStationProps {
   mode: RecordingMode;
@@ -45,24 +46,21 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
 
       <div className="mode-selector">
         <label className="mode-label">Chế độ thu âm</label>
-        <select
-          className="model-select mode-select"
+        <CustomSelect
+          className="mode-custom-select"
+          triggerClassName="model-select mode-select"
+          ariaLabel="Chọn chế độ thu âm"
           value={mode}
-          onChange={(e) => {
+          options={MODE_OPTIONS.map((opt) => ({
+            value: opt.value,
+            label: opt.label,
+            disabled: opt.value === 'live' ? !isLiveModelSelected : isLiveModelSelected,
+          }))}
+          onChange={(value) => {
             if (isActive) onStop();
-            setMode(e.target.value as RecordingMode);
+            setMode(value as RecordingMode);
           }}
-        >
-          {MODE_OPTIONS.map((opt) => (
-            <option
-              key={opt.value}
-              value={opt.value}
-              disabled={opt.value === 'live' ? !isLiveModelSelected : isLiveModelSelected}
-            >
-              {opt.label}
-            </option>
-          ))}
-        </select>
+        />
         {currentMode?.hint && (
           <span className="mode-hint font-mono">{currentMode.hint}</span>
         )}
@@ -71,15 +69,18 @@ export const RecordingStation: React.FC<RecordingStationProps> = ({
       {mode === 'live' && (
         <div className="mode-selector">
           <label className="mode-label">Nguồn âm thanh</label>
-          <select
-            className="model-select mode-select"
+          <CustomSelect
+            className="mode-custom-select"
+            triggerClassName="model-select mode-select"
+            ariaLabel="Chọn nguồn âm thanh"
             value={liveSource}
             disabled={isActive}
-            onChange={(e) => setLiveSource(e.target.value as 'mic' | 'tab')}
-          >
-            <option value="mic">Micro</option>
-            <option value="tab">Âm thanh tab trình duyệt</option>
-          </select>
+            options={[
+              { value: 'mic', label: 'Micro' },
+              { value: 'tab', label: 'Âm thanh tab trình duyệt' },
+            ]}
+            onChange={(value) => setLiveSource(value as 'mic' | 'tab')}
+          />
           <span className="mode-hint font-mono">
             {liveSource === 'tab'
               ? 'Chọn tab/cửa sổ và bật "Chia sẻ âm thanh"'

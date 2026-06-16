@@ -30,6 +30,10 @@ function isAdminUsername(username) {
   return getAdminUsernames().includes(username.toLowerCase());
 }
 
+function isAdminUser(user) {
+  return !!user && user.role === 'admin';
+}
+
 function requireAuth(req, res, next) {
   const header = req.headers['authorization'] || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -46,10 +50,10 @@ function requireAuth(req, res, next) {
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.user || !isAdminUsername(req.user.username)) {
+  if (!isAdminUser(req.user)) {
     return res.status(403).json({ error: 'Chỉ admin mới có quyền truy cập.' });
   }
   next();
 }
 
-module.exports = { signToken, verifyToken, requireAuth, requireAdmin, isAdminUsername };
+module.exports = { signToken, verifyToken, requireAuth, requireAdmin, isAdminUsername, isAdminUser };

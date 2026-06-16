@@ -3,7 +3,9 @@ import { useCallback, useEffect, useState } from 'react';
 export interface AuthUser {
   id: string;
   username: string;
+  role?: 'admin' | 'user';
   isAdmin?: boolean;
+  mustChangePassword?: boolean;
 }
 
 const TOKEN_KEY = 'auth_token';
@@ -89,10 +91,23 @@ export const useAuth = () => {
     if (!res.ok) throw new Error(data.error || 'Đặt lại mật khẩu thất bại.');
   }, []);
 
+  const changePassword = useCallback(async (password: string) => {
+    if (!token) throw new Error('Phiên đăng nhập hết hạn.');
+    const res = await fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Đổi mật khẩu thất bại.');
+    setUser(data.user);
+    return data.user as AuthUser;
+  }, [token]);
+
   const logout = useCallback(() => {
     persistToken(null);
     setUser(null);
   }, []);
 
-  return { token, user, loading, login, register, resetPassword, logout };
+  return { token, user, loading, login, register, resetPassword, changePassword, logout };
 };

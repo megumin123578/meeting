@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Check, X } from 'lucide-react';
+import { CustomSelect } from './CustomSelect';
 
 interface ModelSelectorProps {
   model: string;
@@ -75,11 +76,17 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ model, onSaveModel
 
   return (
     <div className="model-selector">
-      <select
-        className="input-control font-mono model-select"
+      <CustomSelect
+        className="model-custom-select"
+        triggerClassName="font-mono model-select"
+        ariaLabel="Chọn model"
         value={isPreset ? model : CUSTOM_VALUE}
-        onChange={(e) => {
-          const v = e.target.value;
+        options={[
+          ...MODEL_OPTIONS,
+          ...(!isPreset && model ? [{ value: model, label: `Tùy chỉnh: ${model}` }] : []),
+          { value: CUSTOM_VALUE, label: 'Tùy chỉnh slug...' },
+        ]}
+        onChange={(v) => {
           if (v === CUSTOM_VALUE) {
             setCustomMode(true);
             setDraft(isPreset ? '' : model);
@@ -87,17 +94,7 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({ model, onSaveModel
             onSaveModel(v);
           }
         }}
-      >
-        {MODEL_OPTIONS.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-        {!isPreset && model && (
-          <option value={model}>Tùy chỉnh: {model}</option>
-        )}
-        <option value={CUSTOM_VALUE}>Tùy chỉnh slug…</option>
-      </select>
+      />
     </div>
   );
 };

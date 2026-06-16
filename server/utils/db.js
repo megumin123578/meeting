@@ -13,14 +13,16 @@ db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id           TEXT PRIMARY KEY,
-    username     TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    passwordHash TEXT NOT NULL,
-    createdAt    TEXT NOT NULL,
-    apiKeyEnc    TEXT NOT NULL DEFAULT '',
-    model        TEXT NOT NULL DEFAULT ''
-  );
+	  CREATE TABLE IF NOT EXISTS users (
+	    id           TEXT PRIMARY KEY,
+	    username     TEXT NOT NULL UNIQUE COLLATE NOCASE,
+	    passwordHash TEXT NOT NULL,
+	    createdAt    TEXT NOT NULL,
+	    apiKeyEnc    TEXT NOT NULL DEFAULT '',
+	    model        TEXT NOT NULL DEFAULT '',
+	    role         TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user')),
+	    mustChangePassword INTEGER NOT NULL DEFAULT 0
+	  );
 
   CREATE TABLE IF NOT EXISTS sessions (
     id        TEXT PRIMARY KEY,
@@ -42,9 +44,29 @@ db.exec(`
     targetLang     TEXT NOT NULL,
     createdAt      TEXT NOT NULL,
     FOREIGN KEY (sessionId) REFERENCES sessions(id) ON DELETE CASCADE
-  );
-  CREATE INDEX IF NOT EXISTS idx_transcripts_session ON transcripts(sessionId, createdAt DESC);
-`);
+	  );
+	  CREATE INDEX IF NOT EXISTS idx_transcripts_session ON transcripts(sessionId, createdAt DESC);
+
+	  CREATE TABLE IF NOT EXISTS audit_logs (
+	    id             TEXT PRIMARY KEY,
+	    actorId        TEXT NOT NULL,
+	    actorUsername  TEXT NOT NULL,
+	    action         TEXT NOT NULL,
+	    targetUserId   TEXT,
+	    targetUsername TEXT,
+	    details        TEXT NOT NULL DEFAULT '',
+	    createdAt      TEXT NOT NULL
+	  );
+	  CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(createdAt DESC);
+	`);
+
+const userCols = db.prepare('PRAGMA table_info(users)').all().map((col) => col.name);
+if (!userCols.includes('role')) {
+  db.exec("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('admin', 'user'))");
+}
+if (!userCols.includes('mustChangePassword')) {
+  db.exec('ALTER TABLE users ADD COLUMN mustChangePassword INTEGER NOT NULL DEFAULT 0');
+}
 
 // One-time migration from legacy users.json (if present)
 (function migrateLegacyJson() {
@@ -58,8 +80,8 @@ db.exec(`
       return;
     }
     const insert = db.prepare(`
-      INSERT OR IGNORE INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model)
-      VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model)
+      INSERT OR IGNORE INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword)
+      VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword)
     `);
     const tx = db.transaction((rows) => {
       for (const u of rows) {
@@ -70,6 +92,8 @@ db.exec(`
           createdAt: u.createdAt || new Date().toISOString(),
           apiKeyEnc: u.apiKeyEnc || '',
           model: u.model || '',
+          role: u.role === 'admin' ? 'admin' : 'user',
+          mustChangePassword: u.mustChangePassword ? 1 : 0,
         });
       }
     });
@@ -84,8 +108,8 @@ db.exec(`
 const findByUsernameStmt = db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE');
 const findByIdStmt = db.prepare('SELECT * FROM users WHERE id = ?');
 const insertStmt = db.prepare(`
-  INSERT INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model)
-  VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model)
+  INSERT INTO users (id, username, passwordHash, createdAt, apiKeyEnc, model, role, mustChangePassword)
+  VALUES (@id, @username, @passwordHash, @createdAt, @apiKeyEnc, @model, @role, @mustChangePassword)
 `);
 
 function findUserByUsername(username) {
@@ -104,10 +128,12 @@ function createUser(user) {
     createdAt: user.createdAt,
     apiKeyEnc: user.apiKeyEnc || '',
     model: user.model || '',
+    role: user.role === 'admin' ? 'admin' : 'user',
+    mustChangePassword: user.mustChangePassword ? 1 : 0,
   });
 }
 
-const ALLOWED_PATCH_COLS = new Set(['username', 'passwordHash', 'apiKeyEnc', 'model']);
+const ALLOWED_PATCH_COLS = new Set(['username', 'passwordHash', 'apiKeyEnc', 'model', 'role', 'mustChangePassword']);
 
 function updateUser(id, patch) {
   const cols = Object.keys(patch).filter((k) => ALLOWED_PATCH_COLS.has(k));
@@ -122,22 +148,103 @@ function updateUser(id, patch) {
 }
 
 // ---- Admin: user management ----
-const listAllUsersStmt = db.prepare(`
-  SELECT u.id, u.username, u.createdAt, u.model,
+const USER_SORTS = {
+  username: 'username',
+  createdAt: 'createdAt',
+  lastActiveAt: 'lastActiveAt',
+  sessionCount: 'sessionCount',
+  transcriptCount: 'transcriptCount',
+  role: 'role',
+};
+const deleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?');
+const countAdminsStmt = db.prepare("SELECT COUNT(*) AS count FROM users WHERE role = 'admin'");
+const userStatsSelect = `
+  SELECT u.id, u.username, u.createdAt, u.model, u.role, u.mustChangePassword,
          (CASE WHEN u.apiKeyEnc <> '' THEN 1 ELSE 0 END) AS hasApiKey,
          (SELECT COUNT(*) FROM sessions s WHERE s.userId = u.id) AS sessionCount,
-         (SELECT COUNT(*) FROM transcripts t WHERE t.userId = u.id) AS transcriptCount
+         (SELECT COUNT(*) FROM transcripts t WHERE t.userId = u.id) AS transcriptCount,
+         (SELECT MAX(s.updatedAt) FROM sessions s WHERE s.userId = u.id) AS lastActiveAt
   FROM users u
-  ORDER BY u.createdAt ASC
+`;
+const findUserStatsForAdminStmt = db.prepare(`${userStatsSelect} WHERE u.id = ?`);
+const listUserSessionsForAdminStmt = db.prepare(`
+  SELECT s.id, s.title, s.createdAt, s.updatedAt,
+         (SELECT COUNT(*) FROM transcripts t WHERE t.sessionId = s.id) AS transcriptCount
+  FROM sessions s
+  WHERE s.userId = ?
+  ORDER BY s.updatedAt DESC
+  LIMIT 50
 `);
-const deleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?');
+const insertAuditLogStmt = db.prepare(`
+  INSERT INTO audit_logs (id, actorId, actorUsername, action, targetUserId, targetUsername, details, createdAt)
+  VALUES (@id, @actorId, @actorUsername, @action, @targetUserId, @targetUsername, @details, @createdAt)
+`);
+const listAuditLogsStmt = db.prepare(`
+  SELECT id, actorId, actorUsername, action, targetUserId, targetUsername, details, createdAt
+  FROM audit_logs
+  ORDER BY createdAt DESC
+  LIMIT ?
+`);
 
-function listAllUsers() {
-  return listAllUsersStmt.all();
+function userWhere(params, out) {
+  const where = [];
+  if (params.query) {
+    where.push('u.username LIKE @query COLLATE NOCASE');
+    out.query = `%${params.query}%`;
+  }
+  if (params.role === 'admin' || params.role === 'user') {
+    where.push('u.role = @role');
+    out.role = params.role;
+  }
+  return where.length ? ` WHERE ${where.join(' AND ')}` : '';
+}
+
+function listAllUsers(options = {}) {
+  const params = {};
+  const whereSql = userWhere(options, params);
+  const sortBy = USER_SORTS[options.sortBy] || 'createdAt';
+  const sortDir = String(options.sortDir || 'asc').toLowerCase() === 'desc' ? 'DESC' : 'ASC';
+  const hasPaging = Number.isFinite(Number(options.limit)) && Number.isFinite(Number(options.offset));
+  let sql = `${userStatsSelect}${whereSql} ORDER BY ${sortBy} ${sortDir}, username ASC`;
+  if (hasPaging) {
+    sql += ' LIMIT @limit OFFSET @offset';
+    params.limit = Math.max(1, Math.min(Number(options.limit), 100));
+    params.offset = Math.max(0, Number(options.offset));
+  }
+  return db.prepare(sql).all(params);
+}
+function countAllUsers(options = {}) {
+  const params = {};
+  const whereSql = userWhere(options, params);
+  return db.prepare(`SELECT COUNT(*) AS count FROM users u${whereSql}`).get(params).count;
+}
+function findUserStatsForAdmin(id) {
+  return findUserStatsForAdminStmt.get(id);
 }
 function deleteUserById(id) {
   // sessions/transcripts cascade via ON DELETE CASCADE (foreign_keys = ON)
   return deleteUserStmt.run(id).changes > 0;
+}
+function countAdmins() {
+  return countAdminsStmt.get().count;
+}
+function listUserSessionsForAdmin(userId) {
+  return listUserSessionsForAdminStmt.all(userId);
+}
+function createAuditLog(log) {
+  insertAuditLogStmt.run({
+    id: log.id,
+    actorId: log.actorId,
+    actorUsername: log.actorUsername,
+    action: log.action,
+    targetUserId: log.targetUserId || null,
+    targetUsername: log.targetUsername || null,
+    details: log.details || '',
+    createdAt: log.createdAt,
+  });
+}
+function listAuditLogs(limit = 50) {
+  return listAuditLogsStmt.all(Math.max(1, Math.min(Number(limit) || 50, 100)));
 }
 
 // ---- Sessions ----
@@ -211,7 +318,13 @@ module.exports = {
   createUser,
   updateUser,
   listAllUsers,
+  countAllUsers,
+  findUserStatsForAdmin,
   deleteUserById,
+  countAdmins,
+  listUserSessionsForAdmin,
+  createAuditLog,
+  listAuditLogs,
   createSession,
   listSessions,
   findSession,

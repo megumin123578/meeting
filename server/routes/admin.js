@@ -4,21 +4,30 @@ const crypto = require('crypto');
 
 const {
   listAllUsers,
+  countAllUsers,
   deleteUserById,
   createUser,
   updateUser,
   findUserByUsername,
   findUserById,
+  findUserStatsForAdmin,
+  countAdmins,
+  listUserSessionsForAdmin,
+  createAuditLog,
+  listAuditLogs,
 } = require('../utils/db');
-const { requireAuth, requireAdmin, isAdminUsername } = require('../utils/auth');
+const { requireAuth, requireAdmin, isAdminUser } = require('../utils/auth');
 
 const router = express.Router();
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
+const ROLES = new Set(['admin', 'user']);
+const USER_SORTS = new Set(['username', 'createdAt', 'lastActiveAt', 'sessionCount', 'transcriptCount', 'role']);
 
 // Every /admin/* route requires a logged-in admin.
 router.use('/admin', requireAuth, requireAdmin);
 
 function publicUser(u) {
+  const role = u.role === 'admin' ? 'admin' : 'user';
   return {
     id: u.id,
     username: u.username,
@@ -27,20 +36,76 @@ function publicUser(u) {
     hasApiKey: !!u.hasApiKey,
     sessionCount: u.sessionCount ?? 0,
     transcriptCount: u.transcriptCount ?? 0,
-    isAdmin: isAdminUsername(u.username),
-    role: isAdminUsername(u.username) ? 'admin' : 'user',
+    lastActiveAt: u.lastActiveAt || null,
+    mustChangePassword: !!u.mustChangePassword,
+    isAdmin: role === 'admin',
+    role,
   };
+}
+
+function generatedPassword() {
+  return crypto.randomBytes(9).toString('base64url');
+}
+
+function userListParams(query) {
+  const page = Math.max(1, Number(query.page) || 1);
+  const pageSize = Math.max(1, Math.min(Number(query.pageSize) || 10, 100));
+  const sortBy = USER_SORTS.has(query.sortBy) ? query.sortBy : 'createdAt';
+  const sortDir = String(query.sortDir || 'asc').toLowerCase() === 'desc' ? 'desc' : 'asc';
+  const role = ROLES.has(query.role) ? query.role : undefined;
+  const search = String(query.query || '').trim();
+  return { page, pageSize, sortBy, sortDir, role, query: search };
+}
+
+function audit(req, action, target, details = '') {
+  createAuditLog({
+    id: crypto.randomUUID(),
+    actorId: req.user.id,
+    actorUsername: req.user.username,
+    action,
+    targetUserId: target?.id,
+    targetUsername: target?.username,
+    details,
+    createdAt: new Date().toISOString(),
+  });
 }
 
 // List all users with stats
 router.get('/admin/users', (req, res) => {
-  res.json({ users: listAllUsers().map(publicUser) });
+  const params = userListParams(req.query);
+  const total = countAllUsers(params);
+  const users = listAllUsers({
+    ...params,
+    limit: params.pageSize,
+    offset: (params.page - 1) * params.pageSize,
+  }).map(publicUser);
+  res.json({ users, total, page: params.page, pageSize: params.pageSize });
+});
+
+router.get('/admin/audit-logs', (req, res) => {
+  res.json({ logs: listAuditLogs(req.query.limit).map((log) => ({ ...log, details: log.details || '' })) });
+});
+
+router.get('/admin/users/:id', (req, res) => {
+  const target = findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
+  const stats = findUserStatsForAdmin(target.id) || target;
+  return res.json({
+    user: publicUser(stats),
+    sessions: listUserSessionsForAdmin(target.id),
+  });
 });
 
 // Create a new user
 router.post('/admin/users', async (req, res) => {
   try {
-    const { username, password } = req.body || {};
+    const { username, role = 'user', generatePassword = false, mustChangePassword = false } = req.body || {};
+    let { password } = req.body || {};
+    let temporaryPassword = null;
+    if (generatePassword) {
+      temporaryPassword = generatedPassword();
+      password = temporaryPassword;
+    }
     if (!username || !password) {
       return res.status(400).json({ error: 'Cần username và password.' });
     }
@@ -49,6 +114,9 @@ router.post('/admin/users', async (req, res) => {
     }
     if (typeof password !== 'string' || password.length < 6) {
       return res.status(400).json({ error: 'Password tối thiểu 6 ký tự.' });
+    }
+    if (!ROLES.has(role)) {
+      return res.status(400).json({ error: 'Vai trò không hợp lệ.' });
     }
     if (findUserByUsername(username)) {
       return res.status(409).json({ error: 'Username đã tồn tại.' });
@@ -61,9 +129,15 @@ router.post('/admin/users', async (req, res) => {
       createdAt: new Date().toISOString(),
       apiKeyEnc: '',
       model: '',
+      role,
+      mustChangePassword: generatePassword || mustChangePassword ? 1 : 0,
     };
     createUser(user);
-    return res.json({ user: publicUser({ ...user, hasApiKey: 0, sessionCount: 0, transcriptCount: 0 }) });
+    audit(req, 'create_user', user, `role=${role}${user.mustChangePassword ? '; temporary password' : ''}`);
+    return res.json({
+      user: publicUser({ ...user, hasApiKey: 0, sessionCount: 0, transcriptCount: 0 }),
+      temporaryPassword,
+    });
   } catch (err) {
     console.error('admin create user error:', err);
     return res.status(500).json({ error: err.message || 'Tạo user thất bại.' });
@@ -73,19 +147,44 @@ router.post('/admin/users', async (req, res) => {
 // Reset a user's password
 router.post('/admin/users/:id/reset-password', async (req, res) => {
   try {
-    const { password } = req.body || {};
+    const { generatePassword = false, mustChangePassword = false } = req.body || {};
+    let { password } = req.body || {};
+    let temporaryPassword = null;
+    if (generatePassword) {
+      temporaryPassword = generatedPassword();
+      password = temporaryPassword;
+    }
     if (typeof password !== 'string' || password.length < 6) {
       return res.status(400).json({ error: 'Password tối thiểu 6 ký tự.' });
     }
     const target = findUserById(req.params.id);
     if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
     const passwordHash = await bcrypt.hash(password, 10);
-    updateUser(target.id, { passwordHash });
-    return res.json({ ok: true });
+    updateUser(target.id, { passwordHash, mustChangePassword: generatePassword || mustChangePassword ? 1 : 0 });
+    audit(req, 'reset_password', target, generatePassword || mustChangePassword ? 'temporary password' : '');
+    return res.json({ ok: true, temporaryPassword });
   } catch (err) {
     console.error('admin reset-password error:', err);
     return res.status(500).json({ error: err.message || 'Đặt lại mật khẩu thất bại.' });
   }
+});
+
+router.patch('/admin/users/:id/role', (req, res) => {
+  const { role } = req.body || {};
+  if (!ROLES.has(role)) {
+    return res.status(400).json({ error: 'Vai trò không hợp lệ.' });
+  }
+  const target = findUserById(req.params.id);
+  if (!target) return res.status(404).json({ error: 'Không tìm thấy user.' });
+  if (target.id === req.user.id && role !== 'admin') {
+    return res.status(400).json({ error: 'Không thể hạ quyền chính tài khoản của bạn.' });
+  }
+  if (target.role === 'admin' && role !== 'admin' && countAdmins() <= 1) {
+    return res.status(400).json({ error: 'Không thể hạ quyền admin cuối cùng.' });
+  }
+  const updated = updateUser(target.id, { role });
+  audit(req, 'change_role', updated, `${target.role || 'user'} -> ${role}`);
+  return res.json({ user: publicUser(findUserStatsForAdmin(updated.id) || { ...updated, hasApiKey: !!updated.apiKeyEnc }) });
 });
 
 // Delete a user (cascades to their sessions/transcripts)
@@ -95,10 +194,11 @@ router.delete('/admin/users/:id', (req, res) => {
   if (target.id === req.user.id) {
     return res.status(400).json({ error: 'Không thể xoá chính tài khoản của bạn.' });
   }
-  if (isAdminUsername(target.username)) {
-    return res.status(400).json({ error: 'Không thể xoá tài khoản admin.' });
+  if (isAdminUser(target) && countAdmins() <= 1) {
+    return res.status(400).json({ error: 'Không thể xoá admin cuối cùng.' });
   }
   deleteUserById(target.id);
+  audit(req, 'delete_user', target);
   return res.json({ ok: true });
 });
 

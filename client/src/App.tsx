@@ -14,13 +14,13 @@ import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
-import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, Menu } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
 
 export const App: React.FC = () => {
-  const { token, user, loading, login, register, resetPassword, logout } = useAuth();
+  const { token, user, loading, login, register, resetPassword, changePassword, logout } = useAuth();
 
   if (loading) {
     return (
@@ -34,7 +34,95 @@ export const App: React.FC = () => {
     return <LoginPage onLogin={login} onRegister={register} onReset={resetPassword} />;
   }
 
+  if (user.mustChangePassword) {
+    return <ForcePasswordChangePage username={user.username} onChangePassword={changePassword} onLogout={logout} />;
+  }
+
   return <AuthedApp token={token} user={user} onLogout={logout} />;
+};
+
+interface ForcePasswordChangePageProps {
+  username: string;
+  onChangePassword: (password: string) => Promise<unknown>;
+  onLogout: () => void;
+}
+
+const ForcePasswordChangePage: React.FC<ForcePasswordChangePageProps> = ({
+  username,
+  onChangePassword,
+  onLogout,
+}) => {
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (password.length < 6) {
+      setError('Password tối thiểu 6 ký tự.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      setError('Xác nhận password không khớp.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await onChangePassword(password);
+    } catch (err: any) {
+      setError(err?.message || 'Đổi mật khẩu thất bại.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="login-shell">
+      <form className="login-card panel-card" onSubmit={submit}>
+        <div className="login-brand">
+          <ShieldCheck size={32} className="logo-icon" />
+          <div>
+            <h1 className="app-title" style={{ fontSize: '1.5rem' }}>Đổi mật khẩu</h1>
+            <p className="login-hint font-mono">{username}</p>
+          </div>
+        </div>
+        <div className="input-group">
+          <label className="input-label">Mật khẩu mới</label>
+          <input
+            type="password"
+            className="input-control"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={submitting}
+            autoFocus
+          />
+        </div>
+        <div className="input-group">
+          <label className="input-label">Xác nhận mật khẩu</label>
+          <input
+            type="password"
+            className="input-control"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            autoComplete="new-password"
+            disabled={submitting}
+          />
+        </div>
+        {error && <div className="login-error font-mono">{error}</div>}
+        <button type="submit" className="btn btn-primary" disabled={submitting} style={{ width: '100%' }}>
+          {submitting && <Loader2 size={16} className="animate-spin" />}
+          Cập nhật mật khẩu
+        </button>
+        <button type="button" className="logout-btn settings-logout" onClick={onLogout}>
+          <LogOut size={14} />
+          Đăng xuất
+        </button>
+      </form>
+    </div>
+  );
 };
 
 interface AuthedAppProps {
@@ -267,66 +355,67 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const activeAnalyser = mode === 'live' ? liveAnalyser : analyser;
   const handleStop =
     mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
-  const isAdminPage = currentPath === '/admin';
+  const isAdminPage = currentPath === '/admin' || currentPath.startsWith('/admin/');
+  const adminSection =
+    currentPath === '/admin/audit' ? 'audit' :
+    currentPath === '/admin/settings' ? 'settings' :
+    'users';
 
   if (isAdminPage) {
     return (
       <ConfirmProvider>
-        <div className="app-container admin-page-container">
-          <header className="app-header">
-            <div className="app-title-section">
-              <h1 className="app-title">SpeakLink</h1>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+        <AppShell user={user} currentPath={currentPath} onNavigate={navigateTo} onLogout={onLogout}>
+          <div className="app-container admin-page-container">
+            <header className="app-header">
+              <div className="app-title-section">
+                <h1 className="app-title">Admin</h1>
+              </div>
               <span className="user-chip">
                 <User size={12} />
                 <strong>{user.username}</strong>
               </span>
-              <button className="topbar-icon-btn" onClick={() => navigateTo('/')} title="Về trang chính">
-                <X size={16} />
-              </button>
-              <button className="topbar-icon-btn" onClick={onLogout} title="Đăng xuất">
-                <LogOut size={16} />
-              </button>
-            </div>
-          </header>
+            </header>
 
-          {user.isAdmin ? (
-            <AdminDashboard
-              token={token}
-              currentUserId={user.id}
-              onClose={() => navigateTo('/')}
-              onShowToast={showToast}
-              variant="page"
-            />
-          ) : (
-            <div className="admin-denied panel-card">
-              <ShieldCheck size={28} className="logo-icon" />
-              <h2>Không có quyền truy cập</h2>
-              <p>Chỉ tài khoản admin mới mở được dashboard này.</p>
-              <button className="btn btn-primary" onClick={() => navigateTo('/')}>
-                Về trang chính
-              </button>
-            </div>
-          )}
+            {user.isAdmin ? (
+              <AdminDashboard
+                token={token}
+                currentUserId={user.id}
+                onClose={() => navigateTo('/')}
+                onShowToast={showToast}
+                section={adminSection}
+                onNavigate={(path) => navigateTo(path)}
+                variant="page"
+              />
+            ) : (
+              <div className="admin-denied panel-card">
+                <ShieldCheck size={28} className="logo-icon" />
+                <h2>Không có quyền truy cập</h2>
+                <p>Chỉ tài khoản admin mới mở được dashboard này.</p>
+                <button className="btn btn-primary" onClick={() => navigateTo('/')}>
+                  Về trang chính
+                </button>
+              </div>
+            )}
 
-          {toastMessage && (
-            <div className="toast">
-              {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
-                <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
-              ) : (
-                <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
-              )}
-              <span style={{ fontSize: '0.85rem' }}>{toastMessage}</span>
-            </div>
-          )}
-        </div>
+            {toastMessage && (
+              <div className="toast">
+                {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
+                  <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
+                ) : (
+                  <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+                )}
+                <span style={{ fontSize: '0.85rem' }}>{toastMessage}</span>
+              </div>
+            )}
+          </div>
+        </AppShell>
       </ConfirmProvider>
     );
   }
 
   return (
     <ConfirmProvider>
+    <AppShell user={user} currentPath={currentPath} onNavigate={navigateTo} onLogout={onLogout}>
     <div className="app-container">
       <header className="app-header">
         <div className="app-title-section">
@@ -346,15 +435,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
             <User size={12} />
             <strong>{user.username}</strong>
           </span>
-          {user.isAdmin && (
-            <button
-              className="topbar-icon-btn"
-              onClick={() => navigateTo('/admin')}
-              title="Quản trị người dùng"
-            >
-              <ShieldCheck size={16} />
-            </button>
-          )}
           <button
             className="topbar-icon-btn"
             onClick={() => setShowSettings((v) => !v)}
@@ -456,7 +536,80 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
         </div>
       )}
     </div>
+    </AppShell>
     </ConfirmProvider>
+  );
+};
+
+interface AppShellProps {
+  user: AuthUser;
+  currentPath: string;
+  onNavigate: (path: string) => void;
+  onLogout: () => void;
+  children: React.ReactNode;
+}
+
+const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, onLogout, children }) => {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => localStorage.getItem('app_sidebar_collapsed') === 'true');
+  const isHome = currentPath === '/';
+  const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
+
+  useEffect(() => {
+    localStorage.setItem('app_sidebar_collapsed', String(sidebarCollapsed));
+  }, [sidebarCollapsed]);
+
+  return (
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <aside className="app-sidebar" aria-label="Primary navigation">
+        <div className="app-sidebar-brand">
+          <Activity size={20} className="logo-icon" />
+          <span>SpeakLink</span>
+        </div>
+        <nav className="app-sidebar-nav">
+          <button
+            type="button"
+            className={`app-sidebar-link ${isHome ? 'active' : ''}`}
+            onClick={() => onNavigate('/')}
+          >
+            <Activity size={16} />
+            <span>Workspace</span>
+          </button>
+          {user.isAdmin && (
+            <button
+              type="button"
+              className={`app-sidebar-link ${isAdmin ? 'active' : ''}`}
+              onClick={() => onNavigate('/admin/users')}
+            >
+              <ShieldCheck size={16} />
+              <span>Admin</span>
+            </button>
+          )}
+        </nav>
+        <div className="app-sidebar-footer">
+          <div className="app-sidebar-user">
+            <User size={14} />
+            <span>{user.username}</span>
+          </div>
+          <button type="button" className="app-sidebar-link compact" onClick={onLogout}>
+            <LogOut size={16} />
+            <span>Logout</span>
+          </button>
+        </div>
+      </aside>
+      <main className="app-main">
+        <button
+          type="button"
+          className="app-sidebar-toggle app-sidebar-toggle-rail"
+          onClick={() => setSidebarCollapsed((v) => !v)}
+          title={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
+          aria-label={sidebarCollapsed ? 'Hiện sidebar' : 'Ẩn sidebar'}
+          aria-expanded={!sidebarCollapsed}
+        >
+          <Menu size={16} />
+        </button>
+        {children}
+      </main>
+    </div>
   );
 };
 

@@ -1,39 +1,52 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { findUserByUsername, createUser } = require('./db');
+const { findUserByUsername, createUser, updateUser } = require('./db');
 
-// Ensure the admin account configured in .env (ADMIN_USERNAME / ADMIN_PASSWORD)
-// exists. Runs once on server startup. The username is what grants admin
-// rights (see isAdminUsername); this just makes sure the account is usable on
-// a fresh database without manual registration.
+// Ensure admin accounts configured in .env exist and have the admin role.
+// ADMIN_USERNAME may contain a comma-separated list. ADMIN_PASSWORD is only a
+// bootstrap password for accounts that do not exist yet.
 async function ensureAdminUser() {
-  const username = (process.env.ADMIN_USERNAME || '').trim();
+  const usernames = (process.env.ADMIN_USERNAME || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
   const password = process.env.ADMIN_PASSWORD || '';
 
-  if (!username) {
+  if (usernames.length === 0) {
     console.warn('[admin] ADMIN_USERNAME not set — no admin account configured.');
     return;
   }
-  if (findUserByUsername(username)) return; // already exists
 
-  if (!password || password.length < 6) {
-    console.warn(
-      `[admin] Admin "${username}" does not exist and ADMIN_PASSWORD is missing/too short ` +
-        '(>= 6 chars) — cannot seed. Set ADMIN_PASSWORD or register the account manually.'
-    );
-    return;
+  for (const username of usernames) {
+    const existing = findUserByUsername(username);
+    if (existing) {
+      if (existing.role !== 'admin') {
+        updateUser(existing.id, { role: 'admin' });
+        console.log(`[admin] Promoted "${username}" to admin from ADMIN_USERNAME.`);
+      }
+      continue;
+    }
+
+    if (!password || password.length < 6) {
+      console.warn(
+        `[admin] Admin "${username}" does not exist and ADMIN_PASSWORD is missing/too short ` +
+          '(>= 6 chars) — cannot seed. Set ADMIN_PASSWORD or create the account manually.'
+      );
+      continue;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    createUser({
+      id: crypto.randomUUID(),
+      username,
+      passwordHash,
+      createdAt: new Date().toISOString(),
+      apiKeyEnc: '',
+      model: '',
+      role: 'admin',
+    });
+    console.log(`[admin] Seeded admin user "${username}".`);
   }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  createUser({
-    id: crypto.randomUUID(),
-    username,
-    passwordHash,
-    createdAt: new Date().toISOString(),
-    apiKeyEnc: '',
-    model: '',
-  });
-  console.log(`[admin] Seeded admin user "${username}".`);
 }
 
 module.exports = { ensureAdminUser };
