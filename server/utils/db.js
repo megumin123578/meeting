@@ -121,6 +121,25 @@ function updateUser(id, patch) {
   return findUserById(id);
 }
 
+// ---- Admin: user management ----
+const listAllUsersStmt = db.prepare(`
+  SELECT u.id, u.username, u.createdAt, u.model,
+         (CASE WHEN u.apiKeyEnc <> '' THEN 1 ELSE 0 END) AS hasApiKey,
+         (SELECT COUNT(*) FROM sessions s WHERE s.userId = u.id) AS sessionCount,
+         (SELECT COUNT(*) FROM transcripts t WHERE t.userId = u.id) AS transcriptCount
+  FROM users u
+  ORDER BY u.createdAt ASC
+`);
+const deleteUserStmt = db.prepare('DELETE FROM users WHERE id = ?');
+
+function listAllUsers() {
+  return listAllUsersStmt.all();
+}
+function deleteUserById(id) {
+  // sessions/transcripts cascade via ON DELETE CASCADE (foreign_keys = ON)
+  return deleteUserStmt.run(id).changes > 0;
+}
+
 // ---- Sessions ----
 const insertSessionStmt = db.prepare(`
   INSERT INTO sessions (id, userId, title, createdAt, updatedAt)
@@ -191,6 +210,8 @@ module.exports = {
   findUserById,
   createUser,
   updateUser,
+  listAllUsers,
+  deleteUserById,
   createSession,
   listSessions,
   findSession,

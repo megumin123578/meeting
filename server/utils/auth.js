@@ -17,6 +17,19 @@ function verifyToken(token) {
   return jwt.verify(token, getJwtSecret());
 }
 
+// Admin usernames come from .env (ADMIN_USERNAME, comma-separated allowed).
+function getAdminUsernames() {
+  return (process.env.ADMIN_USERNAME || '')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAdminUsername(username) {
+  if (!username) return false;
+  return getAdminUsernames().includes(username.toLowerCase());
+}
+
 function requireAuth(req, res, next) {
   const header = req.headers['authorization'] || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -32,4 +45,11 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = { signToken, verifyToken, requireAuth };
+function requireAdmin(req, res, next) {
+  if (!req.user || !isAdminUsername(req.user.username)) {
+    return res.status(403).json({ error: 'Chỉ admin mới có quyền truy cập.' });
+  }
+  next();
+}
+
+module.exports = { signToken, verifyToken, requireAuth, requireAdmin, isAdminUsername };

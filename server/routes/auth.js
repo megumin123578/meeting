@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 
 const { findUserByUsername, findUserById, createUser, updateUser } = require('../utils/db');
-const { signToken, requireAuth } = require('../utils/auth');
+const { signToken, requireAuth, isAdminUsername } = require('../utils/auth');
 
 const router = express.Router();
 
@@ -36,7 +36,7 @@ router.post('/auth/register', async (req, res) => {
     };
     createUser(user);
     const token = signToken(user);
-    return res.json({ token, user: { id: user.id, username: user.username } });
+    return res.json({ token, user: { id: user.id, username: user.username, isAdmin: isAdminUsername(user.username) } });
   } catch (err) {
     console.error('register error:', err);
     return res.status(500).json({ error: err.message || 'Đăng ký thất bại.' });
@@ -58,7 +58,7 @@ router.post('/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Username hoặc password không đúng.' });
     }
     const token = signToken(user);
-    return res.json({ token, user: { id: user.id, username: user.username } });
+    return res.json({ token, user: { id: user.id, username: user.username, isAdmin: isAdminUsername(user.username) } });
   } catch (err) {
     console.error('login error:', err);
     return res.status(500).json({ error: err.message || 'Đăng nhập thất bại.' });
@@ -92,7 +92,7 @@ router.post('/auth/reset-password', async (req, res) => {
 router.get('/auth/me', requireAuth, (req, res) => {
   const u = findUserById(req.user.id);
   if (!u) return res.status(404).json({ error: 'Không tìm thấy user.' });
-  return res.json({ user: { id: u.id, username: u.username } });
+  return res.json({ user: { id: u.id, username: u.username, isAdmin: isAdminUsername(u.username) } });
 });
 
 module.exports = router;

@@ -13,7 +13,8 @@ import { TranscriptList } from './components/TranscriptList';
 import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
-import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw } from 'lucide-react';
+import { AdminDashboard } from './components/AdminDashboard';
+import { CheckCircle2, AlertTriangle, LogOut, User, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
@@ -44,6 +45,7 @@ interface AuthedAppProps {
 
 const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [currentPath, setCurrentPath] = useState(() => window.location.pathname);
   const [sourceLang, setSourceLang] = useState('en-US');
   const [targetLang, setTargetLang] = useState('vi-VN');
   const [mode, setMode] = useState<RecordingMode>('normal');
@@ -61,6 +63,20 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     () => localStorage.getItem('live_voice') !== 'off'
   );
   const [showSettings, setShowSettings] = useState(false);
+
+  useEffect(() => {
+    const onPopState = () => setCurrentPath(window.location.pathname);
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  const navigateTo = (path: string) => {
+    if (window.location.pathname !== path) {
+      window.history.pushState({}, '', path);
+    }
+    setCurrentPath(path);
+    setShowSettings(false);
+  };
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -251,6 +267,63 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
   const activeAnalyser = mode === 'live' ? liveAnalyser : analyser;
   const handleStop =
     mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
+  const isAdminPage = currentPath === '/admin';
+
+  if (isAdminPage) {
+    return (
+      <ConfirmProvider>
+        <div className="app-container admin-page-container">
+          <header className="app-header">
+            <div className="app-title-section">
+              <h1 className="app-title">SpeakLink</h1>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <span className="user-chip">
+                <User size={12} />
+                <strong>{user.username}</strong>
+              </span>
+              <button className="topbar-icon-btn" onClick={() => navigateTo('/')} title="Về trang chính">
+                <X size={16} />
+              </button>
+              <button className="topbar-icon-btn" onClick={onLogout} title="Đăng xuất">
+                <LogOut size={16} />
+              </button>
+            </div>
+          </header>
+
+          {user.isAdmin ? (
+            <AdminDashboard
+              token={token}
+              currentUserId={user.id}
+              onClose={() => navigateTo('/')}
+              onShowToast={showToast}
+              variant="page"
+            />
+          ) : (
+            <div className="admin-denied panel-card">
+              <ShieldCheck size={28} className="logo-icon" />
+              <h2>Không có quyền truy cập</h2>
+              <p>Chỉ tài khoản admin mới mở được dashboard này.</p>
+              <button className="btn btn-primary" onClick={() => navigateTo('/')}>
+                Về trang chính
+              </button>
+            </div>
+          )}
+
+          {toastMessage && (
+            <div className="toast">
+              {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
+                <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
+              ) : (
+                <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+              )}
+              <span style={{ fontSize: '0.85rem' }}>{toastMessage}</span>
+            </div>
+          )}
+        </div>
+      </ConfirmProvider>
+    );
+  }
 
   return (
     <ConfirmProvider>
@@ -273,6 +346,15 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
             <User size={12} />
             <strong>{user.username}</strong>
           </span>
+          {user.isAdmin && (
+            <button
+              className="topbar-icon-btn"
+              onClick={() => navigateTo('/admin')}
+              title="Quản trị người dùng"
+            >
+              <ShieldCheck size={16} />
+            </button>
+          )}
           <button
             className="topbar-icon-btn"
             onClick={() => setShowSettings((v) => !v)}

@@ -9,9 +9,11 @@ const translateAudioRoute = require('./routes/translateAudio');
 const ttsRoute = require('./routes/tts');
 const translateTextRoute = require('./routes/translateText');
 const authRoute = require('./routes/auth');
+const adminRoute = require('./routes/admin');
 const userConfigRoute = require('./routes/userConfig');
 const sessionsRoute = require('./routes/sessions');
 const { attachLiveTranslate } = require('./routes/liveTranslate');
+const { ensureAdminUser } = require('./utils/seedAdmin');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -31,6 +33,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // API Endpoints
 app.use('/api', authRoute);
+app.use('/api', adminRoute);
 app.use('/api', userConfigRoute);
 app.use('/api', sessionsRoute);
 app.use('/api', testKeyRoute);
@@ -50,6 +53,9 @@ app.get('*', (req, res) => {
 // Start listening (use raw http.Server so we can attach WebSocket upgrade handler)
 const server = http.createServer(app);
 attachLiveTranslate(server);
+
+// Seed the admin account from .env (ADMIN_USERNAME / ADMIN_PASSWORD) if needed.
+ensureAdminUser().catch((err) => console.error('[admin] seed failed:', err));
 
 server.listen(PORT, () => {
   console.log(`=========================================`);

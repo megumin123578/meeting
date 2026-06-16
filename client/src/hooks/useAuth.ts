@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 export interface AuthUser {
   id: string;
   username: string;
+  isAdmin?: boolean;
 }
 
 const TOKEN_KEY = 'auth_token';

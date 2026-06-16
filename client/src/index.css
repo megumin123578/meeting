@@ -30,9 +30,16 @@
   --shadow-premium: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
   --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.15);
 
+  /* CJK fallbacks so Japanese/Chinese/Korean glyphs render even though the
+     Latin web fonts above ship no CJK glyphs. Noto Sans SC/JP/KR are loaded
+     from Google Fonts in index.html; the rest are system-font fallbacks. */
+  --font-cjk: 'Noto Sans SC', 'Noto Sans JP', 'Noto Sans KR',
+    'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans', 'Meiryo',
+    'Malgun Gothic', 'Apple SD Gothic Neo';
+
   /* Fonts */
-  --font-header: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-header: 'Space Grotesk', system-ui, -apple-system, var(--font-cjk), sans-serif;
+  --font-mono: 'JetBrains Mono', var(--font-cjk), monospace;
 }
 
 * {
@@ -44,7 +51,7 @@
 body {
   background-color: var(--bg-main);
   color: var(--color-text-primary);
-  font-family: system-ui, -apple-system, sans-serif;
+  font-family: system-ui, -apple-system, var(--font-cjk), sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
   background-image: 
@@ -1691,6 +1698,197 @@ input:checked + .slider:before {
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.6rem;
+}
+
+/* ---- Admin dashboard ---- */
+.admin-dash {
+  width: 100%;
+  max-width: 860px;
+  max-height: 86vh;
+  display: flex;
+  flex-direction: column;
+  padding: 1.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  background: rgba(17, 22, 38, 0.98);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  animation: modal-pop 0.14s ease-out;
+}
+
+.admin-page-container {
+  min-height: 100vh;
+  height: auto;
+}
+
+.admin-dash-page {
+  max-width: none;
+  max-height: none;
+  flex: 1;
+  box-shadow: none;
+}
+
+.admin-dash-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.admin-dash-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.admin-create-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.admin-create-row .input-control {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.6rem;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.admin-table th {
+  position: sticky;
+  top: 0;
+  background: rgba(17, 22, 38, 0.98);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-table .actions-col {
+  text-align: right;
+  width: 1%;
+}
+
+.admin-dim {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.admin-uname {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-weight: 500;
+}
+
+.admin-badge {
+  font-size: 0.6rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.3rem;
+  background: rgba(99, 102, 241, 0.18);
+  color: var(--color-accent-indigo, #818cf8);
+}
+
+.admin-badge.self {
+  background: rgba(6, 182, 212, 0.15);
+  color: var(--color-accent-teal, #22d3ee);
+}
+
+.admin-badge.user {
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--color-text-muted);
+}
+
+.icon-action {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--color-text-secondary);
+  border-radius: 0.4rem;
+  padding: 0.3rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-left: 0.3rem;
+  vertical-align: middle;
+}
+
+.icon-action:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  border-color: var(--color-text-muted);
+}
+
+.icon-action.danger:hover:not(:disabled) {
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.5);
+}
+
+.icon-action:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.admin-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2.5rem 1rem;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.admin-denied {
+  width: 100%;
+  max-width: 420px;
+  margin: 8vh auto 0;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.8rem;
+}
+
+.admin-denied h2 {
+  font-size: 1.1rem;
+}
+
+.admin-denied p {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
 }
 
 .modal-title {
