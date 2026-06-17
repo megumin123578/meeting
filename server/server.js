@@ -13,6 +13,7 @@ const adminRoute = require('./routes/admin');
 const userConfigRoute = require('./routes/userConfig');
 const sessionsRoute = require('./routes/sessions');
 const { attachLiveTranslate } = require('./routes/liveTranslate');
+const { attachTeamLive } = require('./routes/teamLive');
 const { ensureAdminUser } = require('./utils/seedAdmin');
 
 const app = express();
@@ -53,6 +54,7 @@ app.get('*', (req, res) => {
 // Start listening (use raw http.Server so we can attach WebSocket upgrade handler)
 const server = http.createServer(app);
 attachLiveTranslate(server);
+attachTeamLive(server);
 
 // Seed the admin account from .env (ADMIN_USERNAME / ADMIN_PASSWORD) if needed.
 ensureAdminUser().catch((err) => console.error('[admin] seed failed:', err));
@@ -61,5 +63,6 @@ server.listen(PORT, () => {
   console.log(`=========================================`);
   console.log(`  URL: http://localhost:${PORT}          `);
   console.log(`  WS:  ws://localhost:${PORT}/ws/live-translate`);
+  console.log(`  Team WS: ws://localhost:${PORT}/ws/team-live`);
   console.log(`=========================================`);
 });

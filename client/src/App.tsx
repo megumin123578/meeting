@@ -14,6 +14,7 @@ import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
+import { TeamWorkspace } from './components/TeamWorkspace';
 import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
@@ -474,11 +475,22 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
           topbarContent={appTopbarContent}
         >
           <div className="app-container team-mode-container">
-            <div className="team-empty-panel">
-              <Users size={34} className="logo-icon" />
-              <h2>Team</h2>
-              <p>No team workspace yet.</p>
-            </div>
+            <TeamWorkspace
+              token={token}
+              sourceLang={sourceLang}
+              setSourceLang={setSourceLang}
+              targetLang={targetLang}
+              setTargetLang={setTargetLang}
+              model={model}
+              onSaveModel={saveModel}
+              voiceEnabled={liveVoiceEnabled}
+              onToggleVoice={() => setLiveVoiceEnabled((v) => !v)}
+              playingCardId={playingCardId}
+              loadingCardId={loadingCardId}
+              speakOriginal={speakOriginal}
+              speakAI={speakAI}
+              onShowToast={showToast}
+            />
 
             {toastMessage && (
               <div className="toast">

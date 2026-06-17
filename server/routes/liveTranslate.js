@@ -146,4 +146,4 @@ function attachLiveTranslate(server) {
   return wss;
 }
 
-module.exports = { attachLiveTranslate };
+module.exports = { attachLiveTranslate, buildSetupMessage };
