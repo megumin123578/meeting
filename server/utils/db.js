@@ -48,6 +48,36 @@ db.exec(`
 	  );
 	  CREATE INDEX IF NOT EXISTS idx_transcripts_session ON transcripts(sessionId, createdAt DESC);
 
+  CREATE TABLE IF NOT EXISTS live_room_exports (
+    id              TEXT PRIMARY KEY,
+    roomCode        TEXT NOT NULL,
+    createdByUserId TEXT NOT NULL,
+    createdByUsername TEXT NOT NULL,
+    sourceLang      TEXT NOT NULL,
+    targetLang      TEXT NOT NULL,
+    model           TEXT NOT NULL,
+    createdAt       TEXT NOT NULL,
+    closedAt        TEXT,
+    transcriptCount INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS idx_live_room_exports_roomCode ON live_room_exports(roomCode, createdAt DESC);
+  CREATE INDEX IF NOT EXISTS idx_live_room_exports_closedAt ON live_room_exports(closedAt DESC, createdAt DESC);
+
+  CREATE TABLE IF NOT EXISTS live_room_transcripts (
+    id             TEXT PRIMARY KEY,
+    exportId       TEXT NOT NULL,
+    roomCode       TEXT NOT NULL,
+    speakerId      TEXT,
+    speakerName    TEXT,
+    originalText   TEXT NOT NULL,
+    translatedText TEXT NOT NULL,
+    sourceLang     TEXT NOT NULL,
+    targetLang     TEXT NOT NULL,
+    createdAt      TEXT NOT NULL,
+    FOREIGN KEY (exportId) REFERENCES live_room_exports(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_live_room_transcripts_export ON live_room_transcripts(exportId, createdAt DESC);
+
 	  CREATE TABLE IF NOT EXISTS audit_logs (
 	    id             TEXT PRIMARY KEY,
 	    actorId        TEXT NOT NULL,
@@ -76,6 +106,40 @@ if (!userCols.includes('mustChangePassword')) {
 }
 if (!userCols.includes('approved')) {
   db.exec('ALTER TABLE users ADD COLUMN approved INTEGER NOT NULL DEFAULT 1');
+}
+
+const liveRoomExportCols = db.prepare('PRAGMA table_info(live_room_exports)').all().map((col) => col.name);
+if (!liveRoomExportCols.includes('createdByUserId')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN createdByUserId TEXT NOT NULL DEFAULT ""');
+}
+if (!liveRoomExportCols.includes('createdByUsername')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN createdByUsername TEXT NOT NULL DEFAULT ""');
+}
+if (!liveRoomExportCols.includes('sourceLang')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN sourceLang TEXT NOT NULL DEFAULT "en-US"');
+}
+if (!liveRoomExportCols.includes('targetLang')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN targetLang TEXT NOT NULL DEFAULT "vi-VN"');
+}
+if (!liveRoomExportCols.includes('model')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN model TEXT NOT NULL DEFAULT ""');
+}
+if (!liveRoomExportCols.includes('createdAt')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN createdAt TEXT NOT NULL DEFAULT ""');
+}
+if (!liveRoomExportCols.includes('closedAt')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN closedAt TEXT');
+}
+if (!liveRoomExportCols.includes('transcriptCount')) {
+  db.exec('ALTER TABLE live_room_exports ADD COLUMN transcriptCount INTEGER NOT NULL DEFAULT 0');
+}
+
+const liveRoomTranscriptCols = db.prepare('PRAGMA table_info(live_room_transcripts)').all().map((col) => col.name);
+if (!liveRoomTranscriptCols.includes('speakerId')) {
+  db.exec('ALTER TABLE live_room_transcripts ADD COLUMN speakerId TEXT');
+}
+if (!liveRoomTranscriptCols.includes('speakerName')) {
+  db.exec('ALTER TABLE live_room_transcripts ADD COLUMN speakerName TEXT');
 }
 
 // One-time migration from legacy users.json (if present)
@@ -347,6 +411,81 @@ const listTranscriptsStmt = db.prepare(
 const deleteTranscriptStmt = db.prepare('DELETE FROM transcripts WHERE id = ? AND userId = ?');
 const clearTranscriptsStmt = db.prepare('DELETE FROM transcripts WHERE sessionId = ? AND userId = ?');
 
+const insertLiveRoomExportStmt = db.prepare(`
+  INSERT INTO live_room_exports (id, roomCode, createdByUserId, createdByUsername, sourceLang, targetLang, model, createdAt, closedAt, transcriptCount)
+  VALUES (@id, @roomCode, @createdByUserId, @createdByUsername, @sourceLang, @targetLang, @model, @createdAt, @closedAt, @transcriptCount)
+`);
+const updateLiveRoomExportStmt = db.prepare(`
+  UPDATE live_room_exports
+  SET roomCode = @roomCode,
+      createdByUserId = @createdByUserId,
+      createdByUsername = @createdByUsername,
+      sourceLang = @sourceLang,
+      targetLang = @targetLang,
+      model = @model,
+      createdAt = @createdAt,
+      closedAt = @closedAt,
+      transcriptCount = @transcriptCount
+  WHERE id = @id
+`);
+const findLiveRoomExportStmt = db.prepare('SELECT * FROM live_room_exports WHERE id = ?');
+const listLiveRoomExportsStmt = db.prepare(`
+  SELECT e.*,
+         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+  FROM live_room_exports e
+  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+  LIMIT ?
+`);
+const listLiveRoomExportsByRoomCodeStmt = db.prepare(`
+  SELECT e.*,
+         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+  FROM live_room_exports e
+  WHERE e.roomCode = ?
+  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+`);
+const listLiveRoomExportsByStateStmt = db.prepare(`
+  SELECT e.*,
+         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+  FROM live_room_exports e
+  WHERE (? = 'open' AND e.closedAt IS NULL)
+     OR (? = 'closed' AND e.closedAt IS NOT NULL)
+     OR (? = 'all')
+  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+  LIMIT ?
+`);
+const listLiveRoomExportsByUserStmt = db.prepare(`
+  SELECT e.*,
+         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+  FROM live_room_exports e
+  WHERE e.createdByUserId = ?
+    AND ((? = 'open' AND e.closedAt IS NULL)
+      OR (? = 'closed' AND e.closedAt IS NOT NULL)
+      OR (? = 'all'))
+  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+  LIMIT ?
+`);
+const findLiveRoomExportByUserAndRoomCodeStmt = db.prepare(`
+  SELECT e.*,
+         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+  FROM live_room_exports e
+  WHERE e.createdByUserId = ? AND e.roomCode = ?
+  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+  LIMIT 1
+`);
+const insertLiveRoomTranscriptStmt = db.prepare(`
+  INSERT INTO live_room_transcripts (id, exportId, roomCode, speakerId, speakerName, originalText, translatedText, sourceLang, targetLang, createdAt)
+  VALUES (@id, @exportId, @roomCode, @speakerId, @speakerName, @originalText, @translatedText, @sourceLang, @targetLang, @createdAt)
+`);
+const listLiveRoomTranscriptsStmt = db.prepare(`
+  SELECT * FROM live_room_transcripts WHERE exportId = ? ORDER BY createdAt DESC
+`);
+const countLiveRoomTranscriptsStmt = db.prepare(`
+  SELECT COUNT(*) AS count FROM live_room_transcripts WHERE exportId = ?
+`);
+const closeLiveRoomExportStmt = db.prepare(`
+  UPDATE live_room_exports SET closedAt = @closedAt WHERE id = @id
+`);
+
 function insertTranscript(row) {
   insertTranscriptStmt.run(row);
 }
@@ -359,6 +498,80 @@ function deleteTranscript(userId, id) {
 }
 function clearTranscripts(userId, sessionId) {
   clearTranscriptsStmt.run(sessionId, userId);
+}
+
+function createLiveRoomExport(room) {
+  insertLiveRoomExportStmt.run({
+    id: room.id,
+    roomCode: room.roomCode,
+    createdByUserId: room.createdByUserId,
+    createdByUsername: room.createdByUsername,
+    sourceLang: room.sourceLang,
+    targetLang: room.targetLang,
+    model: room.model,
+    createdAt: room.createdAt,
+    closedAt: room.closedAt || null,
+    transcriptCount: room.transcriptCount || 0,
+  });
+}
+
+function updateLiveRoomExport(id, patch) {
+  const current = findLiveRoomExport(id);
+  if (!current) return null;
+  updateLiveRoomExportStmt.run({
+    id,
+    roomCode: patch.roomCode ?? current.roomCode,
+    createdByUserId: patch.createdByUserId ?? current.createdByUserId,
+    createdByUsername: patch.createdByUsername ?? current.createdByUsername,
+    sourceLang: patch.sourceLang ?? current.sourceLang,
+    targetLang: patch.targetLang ?? current.targetLang,
+    model: patch.model ?? current.model,
+    createdAt: patch.createdAt ?? current.createdAt,
+    closedAt: patch.closedAt ?? current.closedAt ?? null,
+    transcriptCount: patch.transcriptCount ?? current.transcriptCount ?? 0,
+  });
+  return findLiveRoomExport(id);
+}
+
+function findLiveRoomExport(id) {
+  return findLiveRoomExportStmt.get(id);
+}
+
+function listLiveRoomExports(limit = 50, state = 'all') {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
+  const safeState = state === 'open' || state === 'closed' ? state : 'all';
+  return listLiveRoomExportsByStateStmt.all(safeState, safeState, safeState, safeLimit);
+}
+
+function listLiveRoomExportsForRoom(roomCode) {
+  return listLiveRoomExportsByRoomCodeStmt.all(roomCode);
+}
+
+function listLiveRoomExportsForUser(userId, limit = 50, state = 'closed') {
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
+  const safeState = state === 'open' || state === 'closed' ? state : state === 'all' ? 'all' : 'closed';
+  return listLiveRoomExportsByUserStmt.all(userId, safeState, safeState, safeState, safeLimit);
+}
+
+function findLiveRoomExportForUserAndRoomCode(userId, roomCode) {
+  return findLiveRoomExportByUserAndRoomCodeStmt.get(userId, roomCode);
+}
+
+function insertLiveRoomTranscript(row) {
+  insertLiveRoomTranscriptStmt.run(row);
+}
+
+function listLiveRoomTranscripts(exportId) {
+  return listLiveRoomTranscriptsStmt.all(exportId);
+}
+
+function closeLiveRoomExport(id, closedAt = new Date().toISOString()) {
+  const res = closeLiveRoomExportStmt.run({ id, closedAt });
+  return res.changes > 0 ? findLiveRoomExport(id) : null;
+}
+
+function countLiveRoomTranscripts(exportId) {
+  return countLiveRoomTranscriptsStmt.get(exportId).count;
 }
 
 module.exports = {
@@ -386,5 +599,16 @@ module.exports = {
   listTranscripts,
   deleteTranscript,
   clearTranscripts,
+  createLiveRoomExport,
+  updateLiveRoomExport,
+  findLiveRoomExport,
+  findLiveRoomExportForUserAndRoomCode,
+  listLiveRoomExports,
+  listLiveRoomExportsForRoom,
+  listLiveRoomExportsForUser,
+  insertLiveRoomTranscript,
+  listLiveRoomTranscripts,
+  closeLiveRoomExport,
+  countLiveRoomTranscripts,
   _db: db,
 };

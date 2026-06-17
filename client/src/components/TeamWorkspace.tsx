@@ -232,6 +232,42 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [abortRestore, onShowToast, roomStorageKey, team.connected, team.joinRoom]);
 
   useEffect(() => {
+    if (lobbyMode !== 'join' || recentRooms.length === 0 || !token) return;
+
+    let cancelled = false;
+    const authHeaders = { Authorization: `Bearer ${token}` };
+
+    void (async () => {
+      const results = await Promise.all(
+        recentRooms.map(async (roomId) => {
+          try {
+            const res = await fetch(`/api/team-live/rooms/${encodeURIComponent(roomId)}`, {
+              headers: authHeaders,
+            });
+            if (!res.ok) return { roomId, open: false };
+            const data = await res.json().catch(() => ({}));
+            return { roomId, open: !!data.open };
+          } catch {
+            return { roomId, open: true };
+          }
+        })
+      );
+
+      if (cancelled) return;
+      const next = results.filter((item) => item.open).map((item) => item.roomId);
+      if (next.length === recentRooms.length && next.every((roomId, idx) => roomId === recentRooms[idx])) return;
+      setRecentRooms(next);
+      try {
+        localStorage.setItem(recentRoomsKey, JSON.stringify(next));
+      } catch {}
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lobbyMode, recentRooms, recentRoomsKey, token]);
+
+  useEffect(() => {
     if (!team.connected || !team.roomId || team.myLanguage) return;
     const savedLanguage = localStorage.getItem(roomLanguageKey(team.roomId));
     if (!savedLanguage || restoredLanguageRef.current === team.roomId) return;
@@ -434,7 +470,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                             onShowToast(`Không vào được phòng: ${err?.message || 'lỗi không xác định'}`);
                           });
                         }}
-                      >Vào phòng
+                      >
+                      <span>Vào phòng</span>
                       </button>
                       <button
                         type="button"
@@ -466,6 +503,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               </div>
             </section>
           )}
+
         </section>
       </div>
     );
@@ -489,11 +527,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           >
             <div className="modal-header">
               <Languages size={18} className="logo-icon" />
-              <h3 id="team-language-title" className="modal-title">Ngôn ngữ</h3>
+              <h3 id="team-language-title" className="modal-title">Chọn ngôn ngữ của bạn</h3>
             </div>
-            <p className="modal-message">
-              Chọn ngôn ngữ của bạn
-            </p>
             <div className="settings-radio-group team-language-modal-grid">
               {[team.roomConfig.sourceLang, team.roomConfig.targetLang].map((lang) => {
                 const target = lang === team.roomConfig.sourceLang ? team.roomConfig.targetLang : team.roomConfig.sourceLang;

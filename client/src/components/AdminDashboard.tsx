@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { X, RefreshCw, Trash2, KeyRound, UserPlus, ShieldCheck, Loader2, CheckCircle2, Ban } from 'lucide-react';
+import { X, RefreshCw, Trash2, KeyRound, UserPlus, Loader2, CheckCircle2, Ban } from 'lucide-react';
 import { useConfirm } from './ConfirmDialog';
 import { CustomSelect } from './CustomSelect';
 
@@ -425,10 +425,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
       onClick={variant === 'modal' ? (e) => e.stopPropagation() : undefined}
     >
       <div className="admin-dash-header">
-        <h2>
-          <ShieldCheck size={18} className="logo-icon" />
-          Quản trị người dùng
-        </h2>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <button className="topbar-icon-btn" onClick={refreshAll} title="Tải lại" disabled={loading}>
             <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
@@ -728,6 +724,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
           </div>
         </section>
       )}
+
     </div>
   );
 

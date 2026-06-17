@@ -3,7 +3,13 @@ const WebSocket = require('ws');
 const { URL } = require('url');
 
 const { verifyToken } = require('../utils/auth');
-const { findUserById } = require('../utils/db');
+const {
+  findUserById,
+  createLiveRoomExport,
+  updateLiveRoomExport,
+  insertLiveRoomTranscript,
+  closeLiveRoomExport,
+} = require('../utils/db');
 const { decrypt } = require('../utils/crypto');
 const { buildSetupMessage } = require('./liveTranslate');
 
@@ -62,11 +68,54 @@ function roomState(room) {
   };
 }
 
+function pick(obj, ...keys) {
+  if (!obj) return undefined;
+  for (const key of keys) {
+    if (obj[key] !== undefined) return obj[key];
+  }
+  return undefined;
+}
+
+function resetTurnBuffers(room) {
+  room.turnSource = '';
+  room.turnTarget = '';
+  room.turnSourceLang = '';
+  room.turnTargetLang = '';
+  room.turnSpeakerId = null;
+  room.turnSpeakerName = '';
+}
+
+function flushRoomTranscript(room, { force = false, allowEmpty = false } = {}) {
+  const original = String(room.turnSource || '').trim();
+  const translated = String(room.turnTarget || '').trim();
+  if (!original && !translated && !allowEmpty) return;
+  if (!original && !translated && force && !allowEmpty) return;
+
+  const transcript = {
+    id: crypto.randomUUID(),
+    exportId: room.exportId,
+    roomCode: room.id,
+    speakerId: room.turnSpeakerId || room.activeSpeakerId || null,
+    speakerName: room.turnSpeakerName || '',
+    originalText: original,
+    translatedText: translated,
+    sourceLang: room.turnSourceLang || room.sourceLang,
+    targetLang: room.turnTargetLang || room.targetLang,
+    createdAt: new Date().toISOString(),
+  };
+
+  room.transcripts.push(transcript);
+  insertLiveRoomTranscript(transcript);
+  updateLiveRoomExport(room.exportId, { transcriptCount: room.transcripts.length });
+  resetTurnBuffers(room);
+}
+
 function finalizeSpeaker(room, reason = 'speaker stopped') {
   if (room.stopTimer) {
     clearTimeout(room.stopTimer);
     room.stopTimer = null;
   }
+  flushRoomTranscript(room, { force: true });
   room.stopRequested = false;
   room.stopReason = '';
 
@@ -167,6 +216,12 @@ function startSpeaker(room, participant) {
   const targetLang = participant.language === room.sourceLang ? room.targetLang : room.sourceLang;
   const upstream = new WebSocket(upstreamUrl);
   room.upstream = upstream;
+  room.turnSource = '';
+  room.turnTarget = '';
+  room.turnSourceLang = sourceLang;
+  room.turnTargetLang = targetLang;
+  room.turnSpeakerId = participant.id;
+  room.turnSpeakerName = participant.username;
 
   upstream.on('open', () => {
     upstream.send(JSON.stringify(buildSetupMessage({
@@ -189,7 +244,27 @@ function startSpeaker(room, participant) {
     let turnComplete = false;
     try {
       const parsed = JSON.parse(text);
-      const content = parsed.serverContent || parsed.server_content;
+      const content = pick(parsed, 'serverContent', 'server_content');
+      const inputTr = pick(
+        content,
+        'inputTranscription',
+        'input_transcription',
+        'inputAudioTranscription',
+        'input_audio_transcription'
+      );
+      if (inputTr?.text) {
+        room.turnSource += inputTr.text;
+      }
+      const outputTr = pick(
+        content,
+        'outputTranscription',
+        'output_transcription',
+        'outputAudioTranscription',
+        'output_audio_transcription'
+      );
+      if (outputTr?.text) {
+        room.turnTarget += outputTr.text;
+      }
       turnComplete = !!(content && (content.turnComplete || content.turn_complete));
     } catch {}
     broadcast(room, {
@@ -200,6 +275,9 @@ function startSpeaker(room, participant) {
       targetLang,
       data: text,
     });
+    if (turnComplete) {
+      flushRoomTranscript(room, { allowEmpty: true });
+    }
     if (turnComplete && room.stopRequested) {
       finalizeSpeaker(room, room.stopReason || 'speaker stopped');
     }
@@ -215,6 +293,7 @@ function startSpeaker(room, participant) {
       clearTimeout(room.stopTimer);
       room.stopTimer = null;
     }
+    flushRoomTranscript(room, { force: true });
     broadcast(room, {
       type: 'speaker_stopped',
       reason: `upstream closed (${code}): ${reason}`,
@@ -258,6 +337,7 @@ function leaveCurrentRoom(client) {
       }
       room.emptyRoomTimer = setTimeout(() => {
         if (room.participants.size === 0) {
+          closeLiveRoomExport(room.exportId, new Date().toISOString());
           rooms.delete(room.id);
         }
         room.emptyRoomTimer = null;
@@ -350,8 +430,11 @@ function attachTeamLive(server) {
           send(client, { type: 'error', error: 'Hãy chọn hai ngôn ngữ khác nhau cho phòng.' });
           return;
         }
-      const room = {
+        const room = {
           id: makeRoomId(),
+          exportId: crypto.randomUUID(),
+          createdByUserId: user.id,
+          createdByUsername: user.username,
           sourceLang,
           targetLang,
           model: msg.model || DEFAULT_MODEL,
@@ -362,8 +445,27 @@ function attachTeamLive(server) {
           stopRequested: false,
           stopReason: '',
           emptyRoomTimer: null,
+          transcripts: [],
+          turnSource: '',
+          turnTarget: '',
+          turnSourceLang: '',
+          turnTargetLang: '',
+          turnSpeakerId: null,
+          turnSpeakerName: '',
         };
         rooms.set(room.id, room);
+        createLiveRoomExport({
+          id: room.exportId,
+          roomCode: room.id,
+          createdByUserId: room.createdByUserId,
+          createdByUsername: room.createdByUsername,
+          sourceLang: room.sourceLang,
+          targetLang: room.targetLang,
+          model: room.model,
+          createdAt: new Date().toISOString(),
+          closedAt: null,
+          transcriptCount: 0,
+        });
         joinRoom(client, user, room, apiKey);
         return;
       }

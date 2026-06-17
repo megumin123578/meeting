@@ -437,6 +437,156 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(255, 255, 255, 0.02);
 }
 
+.team-history-list {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.team-history-list-scroll {
+  max-height: min(72vh, 760px);
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.team-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  width: 100%;
+  padding: 0.8rem 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.7rem;
+  background: rgba(99, 102, 241, 0.05);
+  color: var(--color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+
+.team-history-row:hover,
+.team-history-row:focus-visible {
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.12);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.team-history-row.active {
+  border-color: var(--border-color-active);
+  background: rgba(99, 102, 241, 0.18);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.14);
+}
+
+.team-history-row strong {
+  display: block;
+  font-size: 0.95rem;
+  letter-spacing: 0.05em;
+}
+
+.team-history-chip {
+  flex-shrink: 0;
+  padding: 0.3rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--color-text-secondary);
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+}
+
+.team-history-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: min(60vh, 620px);
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
+.team-history-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.team-history-meta {
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.team-history-bubble {
+  display: grid;
+  gap: 0.35rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(17, 24, 39, 0.72);
+}
+
+.team-history-bubble p {
+  color: var(--color-text-primary);
+  font-size: 0.9rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.team-history-workspace {
+  width: 100%;
+  min-height: 0;
+}
+
+.team-history-layout {
+  width: 100%;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
+  gap: 0.85rem;
+}
+
+.team-history-sidebar,
+.team-history-detail {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.team-history-detail {
+  min-width: 0;
+  padding: 0.25rem 0 0 0.25rem;
+  border-left: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.team-history-titlebar {
+  justify-content: space-between;
+}
+
+.team-history-detail-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.8rem;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.team-history-detail-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  overflow: auto;
+  padding-right: 0.2rem;
+}
+
 .team-recent-room-list {
   display: grid;
   gap: 0.6rem;
@@ -479,15 +629,18 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .team-recent-room-btn {
-  padding: 0.45rem 0.7rem;
-  min-height: 2rem;
-  font-size: 0.78rem;
+  padding: 0.15rem 0.32rem;
+  min-height: 1.25rem;
+  min-width: 0;
+  font-size: 0.62rem;
+  line-height: 1;
+  gap: 0.2rem;
   white-space: nowrap;
 }
 
 .team-recent-room-btn svg {
-  width: 0.85rem;
-  height: 0.85rem;
+  width: 0.65rem;
+  height: 0.65rem;
 }
 
 .team-wide-btn {
@@ -2637,6 +2790,9 @@ input:checked + .slider:before {
   }
   .team-recent-room-btn {
     flex: 1;
+    padding: 0.15rem 0.28rem;
+    min-height: 1.2rem;
+    font-size: 0.6rem;
   }
   .team-sidebar {
     max-height: 360px;
@@ -3116,6 +3272,21 @@ input:checked + .slider:before {
   border-radius: 0.45rem;
   background: rgba(0, 0, 0, 0.12);
   font-size: 0.8rem;
+}
+
+.admin-room-row {
+  width: 100%;
+  appearance: none;
+  background: rgba(0, 0, 0, 0.12);
+  color: inherit;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.admin-room-row.active {
+  border-color: var(--border-color-active);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15);
 }
 
 .admin-session-row > div {

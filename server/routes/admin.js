@@ -17,6 +17,9 @@ const {
   listAuditLogs,
   getAppSettings,
   updateAppSettings,
+  listLiveRoomExports,
+  findLiveRoomExport,
+  listLiveRoomTranscripts,
 } = require('../utils/db');
 const { requireAuth, requireAdmin, isAdminUser } = require('../utils/auth');
 
@@ -111,6 +114,66 @@ router.get('/admin/users/:id', (req, res) => {
     user: publicUser(stats),
     sessions: listUserSessionsForAdmin(target.id),
   });
+});
+
+router.get('/admin/live-rooms', (req, res) => {
+  try {
+    const limit = Number(req.query.limit) || 50;
+    const state = String(req.query.state || 'all').toLowerCase();
+    return res.json({
+      rooms: listLiveRoomExports(limit, state).map((room) => ({
+        id: room.id,
+        roomCode: room.roomCode,
+        createdByUserId: room.createdByUserId || '',
+        createdByUsername: room.createdByUsername || '',
+        sourceLang: room.sourceLang,
+        targetLang: room.targetLang,
+        model: room.model,
+        createdAt: room.createdAt,
+        closedAt: room.closedAt || null,
+        transcriptCount: room.transcriptCount || 0,
+      })),
+    });
+  } catch (err) {
+    console.error('list live rooms error:', err);
+    return res.status(500).json({ error: err.message || 'Không đọc được danh sách phòng.' });
+  }
+});
+
+router.get('/admin/live-rooms/:id', (req, res) => {
+  try {
+    const room = findLiveRoomExport(req.params.id);
+    if (!room) return res.status(404).json({ error: 'Không tìm thấy phòng.' });
+    return res.json({
+      room: {
+        id: room.id,
+        roomCode: room.roomCode,
+        createdByUserId: room.createdByUserId || '',
+        createdByUsername: room.createdByUsername || '',
+        sourceLang: room.sourceLang,
+        targetLang: room.targetLang,
+        model: room.model,
+        createdAt: room.createdAt,
+        closedAt: room.closedAt || null,
+        transcriptCount: room.transcriptCount || 0,
+      },
+      transcripts: listLiveRoomTranscripts(room.id).map((item) => ({
+        id: item.id,
+        exportId: item.exportId,
+        roomCode: item.roomCode,
+        speakerId: item.speakerId || null,
+        speakerName: item.speakerName || '',
+        originalText: item.originalText,
+        translatedText: item.translatedText,
+        sourceLang: item.sourceLang,
+        targetLang: item.targetLang,
+        createdAt: item.createdAt,
+      })),
+    });
+  } catch (err) {
+    console.error('live room detail error:', err);
+    return res.status(500).json({ error: err.message || 'Không đọc được transcript của phòng.' });
+  }
 });
 
 // Create a new user

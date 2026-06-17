@@ -14,8 +14,9 @@ import { SessionSidebar } from './components/SessionSidebar';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
+import { ConversationHistoryPage } from './components/ConversationHistoryPage';
 import { TeamWorkspace } from './components/TeamWorkspace';
-import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown, History } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
@@ -159,6 +160,12 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     const onPopState = () => setCurrentPath(window.location.pathname);
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
+  }, []);
+
+  useEffect(() => {
+    if (window.location.pathname === '/admin/transcripts') {
+      navigateTo('/admin/users');
+    }
   }, []);
 
   const navigateTo = (path: string) => {
@@ -356,6 +363,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     mode === 'live' ? stopLive : mode === 'realtime' ? stopListening : stopRecording;
   const isAdminPage = currentPath === '/admin' || currentPath.startsWith('/admin/');
   const isTeamPage = currentPath === '/team';
+  const isHistoryPage = currentPath === '/history';
   const adminSection =
     currentPath === '/admin/audit' ? 'audit' :
     currentPath === '/admin/settings' ? 'settings' :
@@ -528,6 +536,34 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     );
   }
 
+  if (isHistoryPage) {
+    return (
+      <ConfirmProvider>
+        <AppShell
+          user={user}
+          currentPath={currentPath}
+          onNavigate={navigateTo}
+          onLogout={onLogout}
+          topbarTitle={appTopbarTitle}
+          topbarContent={appTopbarContent}
+        >
+          <ConversationHistoryPage token={token} onShowToast={showToast} />
+
+          {toastMessage && (
+            <div className="toast">
+              {toastMessage.includes('❌') || toastMessage.includes('Lỗi') ? (
+                <AlertTriangle size={16} style={{ color: 'var(--color-error)' }} />
+              ) : (
+                <CheckCircle2 size={16} style={{ color: 'var(--color-success)' }} />
+              )}
+              <span style={{ fontSize: '0.85rem' }}>{toastMessage}</span>
+            </div>
+          )}
+        </AppShell>
+      </ConfirmProvider>
+    );
+  }
+
   return (
     <ConfirmProvider>
     <AppShell
@@ -632,6 +668,7 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
   const adminCloseTimerRef = useRef<number | null>(null);
   const isHome = currentPath === '/';
   const isTeam = currentPath === '/team';
+  const isHistory = currentPath === '/history';
   const isMode = isHome || isTeam;
   const activeModeLabel = isTeam ? 'Team' : isHome ? 'Personal' : 'Personal';
   const isAdmin = currentPath === '/admin' || currentPath.startsWith('/admin/');
@@ -757,6 +794,14 @@ const AppShell: React.FC<AppShellProps> = ({ user, currentPath, onNavigate, topb
               </div>
             )}
           </div>
+          <button
+            type="button"
+            className={`app-topbar-link ${isHistory ? 'active' : ''}`}
+            onClick={() => navigateAndClose('/history')}
+          >
+            <History size={16} />
+            <span>Lịch sử</span>
+          </button>
           {user.isAdmin && (
             <div
               className="app-topbar-menu"
