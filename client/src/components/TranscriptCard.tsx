@@ -105,15 +105,6 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
               </div>
               <p className="team-message-text team-message-text-translated">{item.translatedText}</p>
 
-              <div className="team-message-actions team-message-actions-bottom">
-                <button
-                  onClick={() => onDelete(item.id)}
-                  className="team-message-icon-btn team-message-delete"
-                  title="Xóa đoạn hội thoại"
-                >
-                  <Trash2 size={13} />
-                </button>
-              </div>
             </div>
           </div>
         </div>
