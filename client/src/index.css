@@ -2154,6 +2154,180 @@ h1, h2, h3, h4, h5, h6 {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.team-transcript-message {
+  border: none;
+  background: transparent;
+  overflow: visible;
+}
+
+.team-transcript-message:hover {
+  border-color: transparent;
+  background: transparent;
+}
+
+.team-message-shell {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.team-transcript-message-self .team-message-shell {
+  flex-direction: row-reverse;
+}
+
+.team-message-avatar {
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  box-shadow: var(--shadow-premium);
+}
+
+.team-transcript-message-self .team-message-avatar {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.12);
+}
+
+.team-message-column {
+  min-width: 0;
+  max-width: min(100%, 760px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.team-transcript-message-self .team-message-column {
+  align-items: flex-end;
+}
+
+.team-message-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0 0.45rem;
+  color: var(--color-text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+}
+
+.team-message-meta strong {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  font-size: 0.76rem;
+}
+
+.team-message-bubble {
+  width: min(100%, 700px);
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.85rem;
+  background: rgba(17, 24, 39, 0.86);
+  box-shadow: var(--shadow-premium);
+}
+
+.team-transcript-message-self .team-message-bubble {
+  background: rgba(99, 102, 241, 0.12);
+  border-color: rgba(99, 102, 241, 0.28);
+}
+
+.team-message-langline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.team-message-langchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.team-message-langchip-accent {
+  color: var(--color-accent-cyan);
+}
+
+.team-message-text {
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.team-message-text-original {
+  color: var(--color-text-secondary);
+  font-size: 0.88rem;
+}
+
+.team-message-text-translated {
+  color: var(--color-text-primary);
+  font-size: 0.98rem;
+  font-weight: 500;
+}
+
+.team-message-separator {
+  height: 1px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.team-message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.team-message-actions-bottom {
+  justify-content: space-between;
+}
+
+.team-message-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.45rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+
+.team-message-icon-btn:hover {
+  color: var(--color-text-primary);
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.12);
+  transform: translateY(-1px);
+}
+
+.team-message-delete:hover {
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #fca5a5;
+  background: rgba(239, 68, 68, 0.1);
+}
+
 .card-meta-bar {
   background: rgba(0, 0, 0, 0.15);
   padding: 0.5rem 1rem;
@@ -2397,6 +2571,23 @@ input:checked + .slider:before {
   .team-transcript-actions {
     width: 100%;
     justify-content: space-between;
+  }
+  .team-message-shell,
+  .team-transcript-message-self .team-message-shell {
+    align-items: flex-start;
+  }
+  .team-message-column,
+  .team-transcript-message-self .team-message-column {
+    max-width: 100%;
+    align-items: stretch;
+  }
+  .team-message-bubble {
+    width: 100%;
+  }
+  .team-message-langline,
+  .team-message-actions-bottom {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

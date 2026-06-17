@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AnimatePresence } from 'motion/react';
 import {
   Clipboard,
   Languages,
@@ -26,6 +27,8 @@ interface TeamWorkspaceProps {
   setTargetLang: (lang: string) => void;
   model: string;
   onSaveModel: (model: string) => void;
+  inputStyle: 'toggle' | 'ptt';
+  pttKey: string;
   voiceEnabled: boolean;
   onToggleVoice: () => void;
   playingCardId: string | null;
@@ -37,6 +40,16 @@ interface TeamWorkspaceProps {
 
 const NoopDelete = () => {};
 
+function displayKey(code: string): string {
+  if (code === 'Space') return 'Space';
+  if (code.startsWith('Key')) return code.slice(3);
+  if (code.startsWith('Digit')) return code.slice(5);
+  if (code === 'ControlLeft' || code === 'ControlRight') return 'Ctrl';
+  if (code === 'ShiftLeft' || code === 'ShiftRight') return 'Shift';
+  if (code === 'AltLeft' || code === 'AltRight') return 'Alt';
+  return code;
+}
+
 export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   token,
   sourceLang,
@@ -45,6 +58,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   setTargetLang,
   model,
   onSaveModel,
+  inputStyle,
+  pttKey,
   voiceEnabled,
   onToggleVoice,
   playingCardId,
@@ -56,17 +71,53 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [joinId, setJoinId] = useState('');
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join' | null>(null);
   const [languagePopupOpen, setLanguagePopupOpen] = useState(false);
+  const isPttActiveRef = useRef(false);
 
   const team = useTeamLive({ token, voiceEnabled, onShowToast });
   const isThisClientSpeaking = team.activeSpeakerId === team.clientId && team.isSpeaking;
   const canSpeak = team.connected && (!team.activeSpeakerId || team.activeSpeakerId === team.clientId);
   const participantCount = team.participants.length;
   const languagePopupVisible = team.connected && (!team.myLanguage || languagePopupOpen);
+  const usePtt = inputStyle === 'ptt';
 
   const chooseLanguage = (lang: string) => {
     team.setParticipantLanguage(lang);
     setLanguagePopupOpen(false);
   };
+
+  useEffect(() => {
+    if (!usePtt) return;
+
+    const isTypingTarget = (target: EventTarget | null) => {
+      if (!(target instanceof HTMLElement)) return false;
+      const tag = target.tagName;
+      return tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable;
+    };
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code !== pttKey || e.repeat) return;
+      if (isTypingTarget(e.target)) return;
+      if (isPttActiveRef.current || team.isStarting || !canSpeak || !team.myLanguage) return;
+      e.preventDefault();
+      isPttActiveRef.current = true;
+      void team.startSpeaking('mic');
+    };
+
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code !== pttKey) return;
+      if (!isPttActiveRef.current) return;
+      e.preventDefault();
+      isPttActiveRef.current = false;
+      team.stopSpeaking();
+    };
+
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      window.removeEventListener('keyup', onKeyUp);
+    };
+  }, [canSpeak, pttKey, team, usePtt]);
 
   const createRoom = async () => {
     if (sourceLang === targetLang) {
@@ -97,11 +148,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       <div className="team-lobby">
         <section className="team-join-panel panel-card">
           <div className="team-lobby-header">
-            <div className="team-section-title">
-              <Users size={18} className="logo-icon" />
-              <h2>Chế độ Team</h2>
-            </div>
-            <span className="status-pill idle">Chưa vào phòng</span>
           </div>
 
           <div className="team-choice-grid" aria-label="Chọn cách vào phòng Team">
@@ -316,46 +362,69 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 <p>Bắt đầu nói hoặc chia sẻ mã phòng cho người khác.</p>
               </div>
             ) : (
-              team.transcripts.map((item: TranscriptItem) => (
-                <TranscriptCard
-                  key={item.id}
-                  item={item}
-                  onDelete={team.deleteTranscript || NoopDelete}
-                  speakOriginal={speakOriginal}
-                  speakAI={speakAI}
-                  playingCardId={playingCardId}
-                  loadingCardId={loadingCardId}
-                />
-              ))
+              <AnimatePresence initial={false}>
+                {team.transcripts.map((item: TranscriptItem) => (
+                  <TranscriptCard
+                    key={item.id}
+                    item={item}
+                    onDelete={team.deleteTranscript || NoopDelete}
+                    speakOriginal={speakOriginal}
+                    speakAI={speakAI}
+                    playingCardId={playingCardId}
+                    loadingCardId={loadingCardId}
+                    variant="team"
+                  />
+                ))}
+              </AnimatePresence>
             )}
           </div>
 
           <div className="conversation-composer team-conversation-composer">
-            <button
-              type="button"
-              className={`btn ${isThisClientSpeaking ? 'btn-secondary' : 'btn-primary'} record-btn`}
-              style={{
-                fontWeight: 'bold',
-                background: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.2)' : undefined,
-                borderColor: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.4)' : undefined,
-                color: isThisClientSpeaking ? '#ef4444' : undefined,
-                boxShadow: isThisClientSpeaking ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
-              }}
-              onClick={() => {
-                if (isThisClientSpeaking) team.stopSpeaking();
-                else void team.startSpeaking('mic');
-              }}
-              disabled={!canSpeak || team.isStarting || !team.myLanguage}
-            >
-              {team.isStarting ? (
-                <Loader2 size={18} className="animate-spin" />
-              ) : isThisClientSpeaking ? (
-                <Square size={18} fill="currentColor" />
-              ) : (
-                <Mic size={18} />
-              )}
-              {isThisClientSpeaking ? 'Dừng nói' : team.myLanguage ? 'Bắt đầu nói' : 'Chọn ngôn ngữ trước'}
-            </button>
+            {usePtt ? (
+              <button
+                type="button"
+                className="btn btn-primary record-btn"
+                style={{
+                  background: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.3)' : undefined,
+                  borderColor: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.5)' : undefined,
+                  boxShadow: isThisClientSpeaking ? '0 0 15px rgba(239, 68, 68, 0.3)' : undefined,
+                }}
+                disabled={team.isStarting || !canSpeak || !team.myLanguage}
+              >
+                {team.isStarting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : (
+                  <Mic size={18} />
+                )}
+                {isThisClientSpeaking ? `Đang thu... Nhả ${displayKey(pttKey)} để dừng` : `Giữ phím ${displayKey(pttKey)} để nói`}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className={`btn ${isThisClientSpeaking ? 'btn-secondary' : 'btn-primary'} record-btn`}
+                style={{
+                  fontWeight: 'bold',
+                  background: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.2)' : undefined,
+                  borderColor: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.4)' : undefined,
+                  color: isThisClientSpeaking ? '#ef4444' : undefined,
+                  boxShadow: isThisClientSpeaking ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
+                }}
+                onClick={() => {
+                  if (isThisClientSpeaking) team.stopSpeaking();
+                  else void team.startSpeaking('mic');
+                }}
+                disabled={!canSpeak || team.isStarting || !team.myLanguage}
+              >
+                {team.isStarting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : isThisClientSpeaking ? (
+                  <Square size={18} fill="currentColor" />
+                ) : (
+                  <Mic size={18} />
+                )}
+                {isThisClientSpeaking ? 'Dừng nói' : team.myLanguage ? 'Bắt đầu nói' : 'Chọn ngôn ngữ trước'}
+              </button>
+            )}
           </div>
         </section>
       </div>

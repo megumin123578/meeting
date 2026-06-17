@@ -58,7 +58,8 @@ function makeTranscript(
   originalText: string,
   translatedText: string,
   sourceLang: string,
-  targetLang: string
+  targetLang: string,
+  meta?: { speakerId?: string; speakerName?: string; isSelf?: boolean }
 ): TranscriptItem {
   return {
     id: crypto.randomUUID(),
@@ -67,6 +68,9 @@ function makeTranscript(
     translatedText,
     sourceLang,
     targetLang,
+    speakerId: meta?.speakerId,
+    speakerName: meta?.speakerName,
+    isSelf: meta?.isSelf,
   };
 }
 
@@ -107,6 +111,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   const turnSourceLangRef = useRef('');
   const turnTargetLangRef = useRef('');
   const latestRoomConfigRef = useRef(roomConfig);
+  const clientIdRef = useRef('');
+  const activeSpeakerIdRef = useRef<string | null>(null);
+  const activeSpeakerNameRef = useRef('');
+  const listenerLanguageRef = useRef('');
 
   useEffect(() => {
     voiceEnabledRef.current = voiceEnabled;
@@ -116,6 +124,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   useEffect(() => {
     latestRoomConfigRef.current = roomConfig;
   }, [roomConfig]);
+
+  useEffect(() => {
+    listenerLanguageRef.current = participants.find((p) => p.id === clientId)?.language || '';
+  }, [participants, clientId]);
 
   const cleanupCapture = useCallback(() => {
     if (workletRef.current) {
@@ -156,6 +168,8 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     const translated = turnTargetRef.current.trim();
     const sourceLang = turnSourceLangRef.current || latestRoomConfigRef.current.sourceLang;
     const targetLang = turnTargetLangRef.current || latestRoomConfigRef.current.targetLang;
+    const speakerId = activeSpeakerIdRef.current || undefined;
+    const speakerName = activeSpeakerNameRef.current || '';
     turnSourceRef.current = '';
     turnTargetRef.current = '';
     turnSourceLangRef.current = '';
@@ -167,7 +181,11 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     if (!original && !translated) return;
 
     setTranscripts((prev) => [
-      makeTranscript(original, translated, sourceLang, targetLang),
+      makeTranscript(original, translated, sourceLang, targetLang, {
+        speakerId,
+        speakerName: speakerName || undefined,
+        isSelf: !!speakerId && speakerId === clientIdRef.current,
+      }),
       ...prev,
     ]);
   }, []);
@@ -187,6 +205,8 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     turnTargetRef.current = '';
     turnSourceLangRef.current = '';
     turnTargetLangRef.current = '';
+    activeSpeakerIdRef.current = null;
+    activeSpeakerNameRef.current = '';
   }, []);
 
   const disconnect = useCallback(() => {
@@ -236,7 +256,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     playHeadRef.current = startAt + buffer.duration;
   }, []);
 
-  const handleLiveMessage = useCallback((raw: string) => {
+  const handleLiveMessage = useCallback((raw: string, allowAudio = true) => {
     let msg: any;
     try {
       msg = JSON.parse(raw);
@@ -277,7 +297,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       const inline = pick(part, 'inlineData', 'inline_data');
       const data = inline?.data;
       const mime: string = pick(inline, 'mimeType', 'mime_type') || '';
-      if (data && mime.startsWith('audio/')) {
+      if (allowAudio && data && mime.startsWith('audio/')) {
         try {
           playPcmChunk(base64ToInt16(data));
         } catch (err) {
@@ -290,6 +310,13 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     if (turnComplete) flushTurn();
   }, [flushTurn, playPcmChunk]);
 
+  const shouldPlayAudioForListener = useCallback((targetLang?: string) => {
+    const listenerLang = listenerLanguageRef.current;
+    if (!voiceEnabledRef.current) return false;
+    if (!listenerLang || !targetLang) return false;
+    return listenerLang === targetLang;
+  }, []);
+
   const handleMessage = useCallback((raw: string) => {
     let msg: any;
     try {
@@ -300,21 +327,26 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
 
     if (msg.type === 'connected') {
       setClientId(msg.clientId || '');
+      clientIdRef.current = msg.clientId || '';
       return;
     }
 
     if (msg.type === 'room_state') {
       setConnected(true);
       setRoomId(msg.roomId || '');
-      setParticipants(Array.isArray(msg.participants) ? msg.participants : []);
+      const roomParticipants = Array.isArray(msg.participants) ? msg.participants : [];
+      setParticipants(roomParticipants);
       setRoomConfig({
         sourceLang: msg.sourceLang || 'en-US',
         targetLang: msg.targetLang || 'vi-VN',
         model: msg.model || DEFAULT_MODEL,
       });
       setActiveSpeakerId(msg.activeSpeakerId || null);
-      const speaker = (msg.participants || []).find((p: TeamParticipant) => p.id === msg.activeSpeakerId);
+      activeSpeakerIdRef.current = msg.activeSpeakerId || null;
+      const speaker = roomParticipants.find((p: TeamParticipant) => p.id === msg.activeSpeakerId);
+      activeSpeakerNameRef.current = speaker?.username || '';
       setActiveSpeakerName(speaker?.username || '');
+      listenerLanguageRef.current = roomParticipants.find((p: TeamParticipant) => p.id === clientIdRef.current)?.language || '';
       return;
     }
 
@@ -329,6 +361,8 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       setCurrentTargetLang(turnTargetLangRef.current);
       setActiveSpeakerId(msg.speakerId || null);
       setActiveSpeakerName(msg.speakerName || '');
+      activeSpeakerIdRef.current = msg.speakerId || null;
+      activeSpeakerNameRef.current = msg.speakerName || '';
       return;
     }
 
@@ -340,7 +374,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     }
 
     if (msg.type === 'live_message') {
-      if (msg.speakerName) setActiveSpeakerName(msg.speakerName);
+      if (msg.speakerName) {
+        activeSpeakerNameRef.current = msg.speakerName;
+        setActiveSpeakerName(msg.speakerName);
+      }
       if (msg.sourceLang) {
         turnSourceLangRef.current = msg.sourceLang;
         setCurrentSourceLang(msg.sourceLang);
@@ -349,7 +386,9 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
         turnTargetLangRef.current = msg.targetLang;
         setCurrentTargetLang(msg.targetLang);
       }
-      if (typeof msg.data === 'string') handleLiveMessage(msg.data);
+      if (typeof msg.data === 'string') {
+        handleLiveMessage(msg.data, shouldPlayAudioForListener(msg.targetLang || turnTargetLangRef.current));
+      }
       return;
     }
 
@@ -361,6 +400,8 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       cleanupCapture();
       setActiveSpeakerId(null);
       setActiveSpeakerName('');
+      activeSpeakerIdRef.current = null;
+      activeSpeakerNameRef.current = '';
       return;
     }
 
@@ -371,7 +412,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       readyRejecterRef.current = null;
       cleanupCapture();
     }
-  }, [cleanupCapture, flushTurn, handleLiveMessage, onShowToast]);
+  }, [cleanupCapture, flushTurn, handleLiveMessage, onShowToast, shouldPlayAudioForListener]);
 
   const connect = useCallback(async (initialMessage: AnyObj) => {
     if (!token) {

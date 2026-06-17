@@ -7,6 +7,9 @@ export interface TranscriptItem {
   translatedText: string;
   sourceLang: string;
   targetLang: string;
+  speakerId?: string;
+  speakerName?: string;
+  isSelf?: boolean;
 }
 
 interface UseTranslatorProps {

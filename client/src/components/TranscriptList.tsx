@@ -62,6 +62,9 @@ export const TranscriptList: React.FC<TranscriptListProps> = ({
 
     transcripts.forEach((item, index) => {
       mdContent += `### [Phần ${transcripts.length - index}] - Lịch: ${item.timestamp}\n`;
+      if (item.speakerName) {
+        mdContent += `Người nói: ${item.speakerName}${item.isSelf ? ' (Bạn)' : ''}\n`;
+      }
       mdContent += `🌐 Hướng dịch: ${item.sourceLang} ➡️ ${item.targetLang}\n\n`;
       mdContent += `**Văn bản gốc (${item.sourceLang.split('-')[0].toUpperCase()}):**\n`;
       mdContent += `${item.originalText}\n\n`;

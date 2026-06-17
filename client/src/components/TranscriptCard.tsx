@@ -11,6 +11,7 @@ interface TranscriptCardProps {
   speakAI: (text: string, language: string, cardId: string) => Promise<void>;
   playingCardId: string | null;
   loadingCardId: string | null;
+  variant?: 'default' | 'team';
 }
 
 export const TranscriptCard: React.FC<TranscriptCardProps> = ({
@@ -20,6 +21,7 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
   speakAI,
   playingCardId,
   loadingCardId,
+  variant = 'default',
 }) => {
   const [copiedOriginal, setCopiedOriginal] = useState(false);
   const [copiedTranslated, setCopiedTranslated] = useState(false);
@@ -47,6 +49,102 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
   const isOriginalPlaying = playingCardId === `${item.id}-original`;
   const isAIPlaying = playingCardId === `${item.id}-ai`;
   const isAILoading = loadingCardId === `${item.id}-ai`;
+  const speakerLabel = item.speakerName || (item.isSelf ? 'Bạn' : 'Người nói');
+  const cardClassName = variant === 'team'
+    ? `transcript-card team-transcript-message ${item.isSelf ? 'team-transcript-message-self' : 'team-transcript-message-other'}`
+    : 'transcript-card';
+
+  if (variant === 'team') {
+    return (
+      <motion.div
+        layout
+        initial={{ opacity: 0, y: 12, scale: 0.985 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.98 }}
+        transition={{ duration: 0.18 }}
+        className={cardClassName}
+      >
+        <div className="team-message-shell">
+          <div className="team-message-avatar" aria-hidden="true">
+            {(speakerLabel || '?').slice(0, 1).toUpperCase()}
+          </div>
+          <div className="team-message-column">
+            <div className="team-message-meta">
+              <strong>{speakerLabel}</strong>
+              <span>{item.timestamp}</span>
+            </div>
+
+            <div className="team-message-bubble">
+              <div className="team-message-langline">
+                <span className="team-message-langchip">
+                  Gốc · <span className="font-mono">{item.sourceLang.split('-')[0].toUpperCase()}</span>
+                </span>
+                <button
+                  onClick={handleCopyOriginal}
+                  className="team-message-icon-btn"
+                  title="Sao chép văn bản gốc"
+                >
+                  {copiedOriginal ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
+                </button>
+              </div>
+              <p className="team-message-text team-message-text-original">{item.originalText}</p>
+
+              <div className="team-message-separator" />
+
+              <div className="team-message-langline">
+                <span className="team-message-langchip team-message-langchip-accent">
+                  Dịch · <span className="font-mono">{item.targetLang.split('-')[0].toUpperCase()}</span>
+                </span>
+                <div className="team-message-actions">
+                  <button
+                    className={`btn btn-secondary audio-play-btn ${isOriginalPlaying ? 'playing' : ''}`}
+                    onClick={() => speakOriginal(item.originalText, item.sourceLang, item.id)}
+                    disabled={!!playingCardId && !isOriginalPlaying}
+                  >
+                    <Volume2 size={12} className={isOriginalPlaying ? 'animate-pulse' : ''} />
+                    {isOriginalPlaying ? 'Đang phát...' : 'Nghe gốc'}
+                  </button>
+                  <button
+                    className="team-message-icon-btn"
+                    onClick={handleCopyTranslated}
+                    title="Sao chép bản dịch"
+                  >
+                    {copiedTranslated ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
+                  </button>
+                </div>
+              </div>
+              <p className="team-message-text team-message-text-translated">{item.translatedText}</p>
+
+              <div className="team-message-actions team-message-actions-bottom">
+                <button
+                  className={`btn btn-primary audio-play-btn ${isAIPlaying ? 'playing' : ''}`}
+                  onClick={() => speakAI(item.translatedText, item.targetLang, item.id)}
+                  disabled={!!playingCardId && !isAIPlaying}
+                  style={{
+                    boxShadow: isAIPlaying ? '0 0 10px rgba(99, 102, 241, 0.4)' : undefined,
+                  }}
+                >
+                  {isAILoading ? (
+                    <Loader2 size={12} className="animate-spin" />
+                  ) : (
+                    <Volume2 size={12} className={isAIPlaying ? 'animate-pulse' : ''} />
+                  )}
+                  {isAIPlaying ? 'Đang phát...' : 'Nghe AI'}
+                </button>
+                <button
+                  onClick={() => onDelete(item.id)}
+                  className="team-message-icon-btn team-message-delete"
+                  title="Xóa đoạn hội thoại"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div
@@ -55,7 +153,7 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
-      className="transcript-card"
+      className={cardClassName}
     >
       {/* Top Meta Bar */}
       <div className="card-meta-bar" style={{ justifyContent: 'flex-end' }}>

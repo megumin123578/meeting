@@ -483,6 +483,8 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               setTargetLang={setTargetLang}
               model={model}
               onSaveModel={saveModel}
+              inputStyle={inputStyle}
+              pttKey={pttKey}
               voiceEnabled={liveVoiceEnabled}
               onToggleVoice={() => setLiveVoiceEnabled((v) => !v)}
               playingCardId={playingCardId}
