@@ -11,6 +11,7 @@ const DEFAULT_MODEL = 'gemini-3.5-live-translate-preview';
 const rooms = new Map();
 const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
 const STOP_GRACE_MS = 1200;
+const RECONNECT_GRACE_MS = 10000;
 
 function send(client, payload) {
   if (client.readyState !== WebSocket.OPEN) return;
@@ -23,6 +24,13 @@ function broadcast(room, payload) {
   for (const participant of room.participants.values()) {
     send(participant.ws, payload);
   }
+}
+
+function findParticipantByUserId(room, userId) {
+  for (const participant of room.participants.values()) {
+    if (participant.userId === userId) return participant;
+  }
+  return null;
 }
 
 function makeRoomId() {
@@ -94,6 +102,23 @@ function joinRoom(client, user, room, apiKey) {
     clearTimeout(room.emptyRoomTimer);
     room.emptyRoomTimer = null;
   }
+
+  const existingParticipant = findParticipantByUserId(room, user.id);
+  if (existingParticipant) {
+    if (existingParticipant.disconnectTimer) {
+      clearTimeout(existingParticipant.disconnectTimer);
+      existingParticipant.disconnectTimer = null;
+    }
+    existingParticipant.username = user.username;
+    existingParticipant.apiKey = apiKey;
+    existingParticipant.ws = client;
+    existingParticipant.room = room;
+    client.teamParticipant = existingParticipant;
+    send(client, { type: 'connected', clientId: existingParticipant.id, username: user.username });
+    broadcast(room, roomState(room));
+    return;
+  }
+
   const participant = {
     id: crypto.randomUUID(),
     userId: user.id,
@@ -102,6 +127,7 @@ function joinRoom(client, user, room, apiKey) {
     apiKey,
     ws: client,
     room,
+    disconnectTimer: null,
   };
 
   client.teamParticipant = participant;
@@ -207,31 +233,41 @@ function startSpeaker(room, participant) {
 function leaveCurrentRoom(client) {
   const participant = client.teamParticipant;
   if (!participant?.room) return;
+  if (participant.ws !== client) return;
 
   const room = participant.room;
   if (room.activeSpeakerId === participant.id) {
     stopSpeaker(room, 'speaker left');
   }
 
-  room.participants.delete(participant.id);
   client.teamParticipant = null;
 
-  if (room.participants.size === 0) {
-    if (room.upstream) {
-      try {
-        room.upstream.close();
-      } catch {}
-    }
-    room.emptyRoomTimer = setTimeout(() => {
-      if (room.participants.size === 0) {
-        rooms.delete(room.id);
-      }
-      room.emptyRoomTimer = null;
-    }, EMPTY_ROOM_TTL_MS);
-    return;
+  participant.ws = null;
+  if (participant.disconnectTimer) {
+    clearTimeout(participant.disconnectTimer);
   }
+  participant.disconnectTimer = setTimeout(() => {
+    if (participant.ws) return;
+    room.participants.delete(participant.id);
+    participant.disconnectTimer = null;
 
-  broadcast(room, roomState(room));
+    if (room.participants.size === 0) {
+      if (room.upstream) {
+        try {
+          room.upstream.close();
+        } catch {}
+      }
+      room.emptyRoomTimer = setTimeout(() => {
+        if (room.participants.size === 0) {
+          rooms.delete(room.id);
+        }
+        room.emptyRoomTimer = null;
+      }, EMPTY_ROOM_TTL_MS);
+      return;
+    }
+
+    broadcast(room, roomState(room));
+  }, RECONNECT_GRACE_MS);
 }
 
 function attachTeamLive(server) {

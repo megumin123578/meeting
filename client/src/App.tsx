@@ -152,6 +152,8 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     () => localStorage.getItem('live_voice') !== 'off'
   );
   const [showSettings, setShowSettings] = useState(false);
+  const [leaveRoomTick, setLeaveRoomTick] = useState(0);
+  const [teamConnected, setTeamConnected] = useState(false);
 
   useEffect(() => {
     const onPopState = () => setCurrentPath(window.location.pathname);
@@ -411,6 +413,11 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
             setInputStyle={setInputStyle}
             pttKey={pttKey}
             setPttKey={setPttKey}
+            showLeaveRoom={isTeamPage && teamConnected}
+            onLeaveRoom={() => {
+              setShowSettings(false);
+              setLeaveRoomTick((v) => v + 1);
+            }}
             onLogout={onLogout}
             onClose={() => setShowSettings(false)}
           />
@@ -483,6 +490,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
         >
           <div className="app-container team-mode-container">
             <TeamWorkspace
+              userId={user.id}
               token={token}
               sourceLang={sourceLang}
               setSourceLang={setSourceLang}
@@ -500,6 +508,8 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               speakAI={speakAI}
               onShowToast={showToast}
               onWaveStateChange={setTeamTopbarWave}
+              leaveRoomTick={leaveRoomTick}
+              onConnectionChange={setTeamConnected}
             />
 
             {toastMessage && (
@@ -837,6 +847,8 @@ interface SettingsPopoverProps {
   setInputStyle: (s: InputStyle) => void;
   pttKey: string;
   setPttKey: (k: string) => void;
+  showLeaveRoom?: boolean;
+  onLeaveRoom?: () => void;
   onLogout: () => void;
   onClose: () => void;
 }
@@ -853,6 +865,8 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   setInputStyle,
   pttKey,
   setPttKey,
+  showLeaveRoom,
+  onLeaveRoom,
   onLogout,
   onClose,
 }) => {
@@ -1013,6 +1027,16 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
       </div>
 
       <div className="settings-divider"></div>
+
+      {showLeaveRoom && (
+        <>
+          <button type="button" className="btn btn-secondary settings-wide-btn" onClick={onLeaveRoom}>
+            <LogOut size={14} />
+            Rời phòng
+          </button>
+          <div className="settings-divider"></div>
+        </>
+      )}
 
       <button className="logout-btn settings-logout" onClick={onLogout}>
         <LogOut size={14} />

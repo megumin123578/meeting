@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence } from 'motion/react';
 import {
   Clipboard,
@@ -20,6 +20,7 @@ import { useTeamLive } from '../hooks/useTeamLive';
 import type { TranscriptItem } from '../hooks/useTranslator';
 
 interface TeamWorkspaceProps {
+  userId: string;
   token: string | null;
   sourceLang: string;
   setSourceLang: (lang: string) => void;
@@ -37,6 +38,8 @@ interface TeamWorkspaceProps {
   speakAI: (text: string, language: string, cardId: string) => Promise<void>;
   onShowToast: (message: string) => void;
   onWaveStateChange?: (state: { isRecording: boolean; analyser: AnalyserNode | null }) => void;
+  onConnectionChange?: (connected: boolean) => void;
+  leaveRoomTick: number;
 }
 
 const NoopDelete = () => {};
@@ -52,6 +55,7 @@ function displayKey(code: string): string {
 }
 
 export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
+  userId,
   token,
   sourceLang,
   setSourceLang,
@@ -69,11 +73,31 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   speakAI,
   onShowToast,
   onWaveStateChange,
+  onConnectionChange,
+  leaveRoomTick,
 }) => {
   const [joinId, setJoinId] = useState('');
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join' | null>(null);
   const [languagePopupOpen, setLanguagePopupOpen] = useState(false);
+  const [restoringRoomId, setRestoringRoomId] = useState('');
   const isPttActiveRef = useRef(false);
+  const restoreAttemptRef = useRef(0);
+  const restoreFailedRef = useRef(false);
+  const restoredLanguageRef = useRef<string>('');
+  const roomStorageKey = `team_last_room_id:${userId}`;
+  const roomLanguageKey = useCallback((roomId: string) => `team_room_language:${userId}:${roomId}`, [userId]);
+  const syncRoomUrl = useCallback((roomId: string) => {
+    const url = new URL(window.location.href);
+    if (roomId) url.searchParams.set('room', roomId);
+    else url.searchParams.delete('room');
+    window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+  }, []);
+  const clearRoomPersistence = useCallback((roomId?: string) => {
+    localStorage.removeItem(roomStorageKey);
+    sessionStorage.removeItem(roomStorageKey);
+    if (roomId) localStorage.removeItem(roomLanguageKey(roomId));
+    syncRoomUrl('');
+  }, [roomLanguageKey, roomStorageKey, syncRoomUrl]);
 
   const team = useTeamLive({ token, voiceEnabled, onShowToast });
   const isThisClientSpeaking = team.activeSpeakerId === team.clientId && team.isSpeaking;
@@ -90,8 +114,82 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     });
   }, [onWaveStateChange, team.analyser, team.isSpeaking]);
 
+  useEffect(() => {
+    onConnectionChange?.(team.connected);
+  }, [onConnectionChange, team.connected]);
+
+  useEffect(() => {
+    if (!team.connected || !team.roomId) return;
+    restoreFailedRef.current = false;
+    localStorage.setItem(roomStorageKey, team.roomId);
+    sessionStorage.setItem(roomStorageKey, team.roomId);
+    syncRoomUrl(team.roomId);
+  }, [roomStorageKey, team.connected, team.roomId]);
+
+  useEffect(() => {
+    if (!team.connected) return;
+    const currentRoomId = team.roomId;
+    team.disconnect();
+    clearRoomPersistence(currentRoomId);
+    setLanguagePopupOpen(false);
+    isPttActiveRef.current = false;
+    restoredLanguageRef.current = '';
+    setRestoringRoomId('');
+  }, [leaveRoomTick]); // intentionally only reacts to explicit leave requests
+
+  useEffect(() => {
+    if (team.connected) {
+      setRestoringRoomId('');
+      restoreFailedRef.current = false;
+      return;
+    }
+    if (restoreFailedRef.current || restoringRoomId) return;
+
+    const urlRoomId = new URL(window.location.href).searchParams.get('room') || '';
+    const savedRoomId =
+      urlRoomId ||
+      sessionStorage.getItem(roomStorageKey) ||
+      localStorage.getItem(roomStorageKey) ||
+      '';
+    if (!savedRoomId) return;
+
+    const attempt = restoreAttemptRef.current + 1;
+    restoreAttemptRef.current = attempt;
+    setRestoringRoomId(savedRoomId);
+
+    const timer = window.setTimeout(() => {
+      if (restoreAttemptRef.current !== attempt || team.connected) return;
+      void team.joinRoom(savedRoomId);
+    }, 0);
+
+    const timeout = window.setTimeout(() => {
+      if (restoreAttemptRef.current !== attempt || team.connected) return;
+      restoreFailedRef.current = true;
+      setRestoringRoomId('');
+      onShowToast('Không nối lại được phòng đã lưu.');
+    }, 8000);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(timeout);
+    };
+  }, [onShowToast, roomStorageKey, team.connected, team.joinRoom]);
+
+  useEffect(() => {
+    if (!team.connected || !team.roomId || team.myLanguage) return;
+    const savedLanguage = localStorage.getItem(roomLanguageKey(team.roomId));
+    if (!savedLanguage || restoredLanguageRef.current === team.roomId) return;
+    if (savedLanguage !== team.roomConfig.sourceLang && savedLanguage !== team.roomConfig.targetLang) return;
+    restoredLanguageRef.current = team.roomId;
+    team.setParticipantLanguage(savedLanguage);
+  }, [roomLanguageKey, team.connected, team.myLanguage, team.roomConfig.sourceLang, team.roomConfig.targetLang, team.roomId, team.setParticipantLanguage]);
+
   const chooseLanguage = (lang: string) => {
     team.setParticipantLanguage(lang);
+    if (team.roomId) {
+      localStorage.setItem(roomLanguageKey(team.roomId), lang);
+      restoredLanguageRef.current = team.roomId;
+    }
     setLanguagePopupOpen(false);
   };
 
@@ -154,6 +252,20 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   };
 
   if (!team.connected) {
+    if (restoringRoomId) {
+      return (
+        <div className="team-lobby">
+          <section className="team-join-panel panel-card">
+            <div className="team-lobby-header" />
+            <div className="empty-state team-empty-state">
+              <Loader2 size={42} className="animate-spin empty-state-icon" />
+              <h3>Đang nối lại phòng</h3>
+              <p>{restoringRoomId}</p>
+            </div>
+          </section>
+        </div>
+      );
+    }
     return (
       <div className="team-lobby">
         <section className="team-join-panel panel-card">
@@ -390,7 +502,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           </div>
 
           <div className="conversation-composer team-conversation-composer">
-      {usePtt ? (
+            {usePtt ? (
               <button
                 type="button"
                 className="btn btn-primary record-btn"
