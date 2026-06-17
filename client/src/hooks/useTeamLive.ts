@@ -88,6 +88,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   const [activeSpeakerName, setActiveSpeakerName] = useState('');
   const [isStarting, setIsStarting] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isStopping, setIsStopping] = useState(false);
   const [interimSource, setInterimSource] = useState('');
   const [interimTarget, setInterimTarget] = useState('');
   const [currentSourceLang, setCurrentSourceLang] = useState('');
@@ -150,6 +151,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     }
     setIsSpeaking(false);
     setIsStarting(false);
+    setIsStopping(false);
   }, []);
 
   const cleanupPlayback = useCallback(() => {
@@ -207,6 +209,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     turnTargetLangRef.current = '';
     activeSpeakerIdRef.current = null;
     activeSpeakerNameRef.current = '';
+    setIsStopping(false);
   }, []);
 
   const disconnect = useCallback(() => {
@@ -351,6 +354,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     }
 
     if (msg.type === 'speaker_started') {
+      setIsStopping(false);
       turnSourceRef.current = '';
       turnTargetRef.current = '';
       turnSourceLangRef.current = msg.sourceLang || latestRoomConfigRef.current.sourceLang;
@@ -363,6 +367,11 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       setActiveSpeakerName(msg.speakerName || '');
       activeSpeakerIdRef.current = msg.speakerId || null;
       activeSpeakerNameRef.current = msg.speakerName || '';
+      return;
+    }
+
+    if (msg.type === 'speaker_stopping') {
+      setIsStopping(true);
       return;
     }
 
@@ -402,21 +411,23 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       setActiveSpeakerName('');
       activeSpeakerIdRef.current = null;
       activeSpeakerNameRef.current = '';
+      setIsStopping(false);
       return;
     }
 
     if (msg.type === 'error') {
-      onShowToast(`❌ Team: ${msg.error || 'lỗi'}`);
+      onShowToast(`Team: ${msg.error || 'lỗi'}`);
       readyRejecterRef.current?.(new Error(msg.error || 'Lỗi phòng Team'));
       readyResolverRef.current = null;
       readyRejecterRef.current = null;
       cleanupCapture();
+      setIsStopping(false);
     }
   }, [cleanupCapture, flushTurn, handleLiveMessage, onShowToast, shouldPlayAudioForListener]);
 
   const connect = useCallback(async (initialMessage: AnyObj) => {
     if (!token) {
-      onShowToast('⚠️ Cần đăng nhập trước.');
+      onShowToast('Cần đăng nhập trước.');
       return;
     }
 
@@ -433,13 +444,13 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       else if (ev.data instanceof ArrayBuffer) handleMessage(new TextDecoder('utf-8').decode(ev.data));
       else if (typeof Blob !== 'undefined' && ev.data instanceof Blob) ev.data.text().then(handleMessage).catch(() => {});
     };
-    ws.onerror = () => onShowToast('❌ Mất kết nối Team.');
+    ws.onerror = () => onShowToast('Mất kết nối Team.');
     ws.onclose = () => {
       cleanupCapture();
       cleanupPlayback();
       if (!manualCloseRef.current) {
         resetRoomState();
-        onShowToast('⚠️ Đã rời khỏi phòng Team.');
+        onShowToast('Đã rời khỏi phòng Team.');
       }
     };
 
@@ -470,7 +481,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   const setParticipantLanguage = useCallback((language: string) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      onShowToast('⚠️ Hãy tạo hoặc tham gia phòng trước.');
+      onShowToast('Hãy tạo hoặc tham gia phòng trước.');
       return;
     }
     ws.send(JSON.stringify({ type: 'set_language', language }));
@@ -528,19 +539,20 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     };
     workletRef.current = worklet;
     setIsSpeaking(true);
+    setIsStopping(false);
   }, [cleanupCapture]);
 
   const startSpeaking = useCallback(async (audioSource: 'mic' | 'tab' = 'mic') => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
-      onShowToast('⚠️ Hãy tạo hoặc tham gia phòng trước.');
+      onShowToast('Hãy tạo hoặc tham gia phòng trước.');
       return;
     }
     if (activeSpeakerId && activeSpeakerId !== clientId) {
-      onShowToast('⚠️ Một người khác đang nói.');
+      onShowToast('Một người khác đang nói.');
       return;
     }
-    if (isSpeaking || isStarting) return;
+    if (isSpeaking || isStarting || isStopping) return;
 
     setIsStarting(true);
     try {
@@ -559,7 +571,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       await ready;
       await startCapture(audioSource);
     } catch (err: any) {
-      onShowToast(`❌ Không bắt đầu nói được: ${err?.message || 'lỗi không xác định'}`);
+      onShowToast(`Không bắt đầu nói được: ${err?.message || 'lỗi không xác định'}`);
       try {
         ws.send(JSON.stringify({ type: 'speaker_stop' }));
       } catch {}
@@ -567,14 +579,14 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     } finally {
       setIsStarting(false);
     }
-  }, [activeSpeakerId, cleanupCapture, clientId, isSpeaking, isStarting, onShowToast, startCapture]);
+  }, [activeSpeakerId, cleanupCapture, clientId, isSpeaking, isStarting, isStopping, onShowToast, startCapture]);
 
   const stopSpeaking = useCallback(() => {
-    flushTurn();
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'speaker_stop' }));
+    setIsStopping(true);
     cleanupCapture();
-  }, [cleanupCapture, flushTurn]);
+  }, [cleanupCapture]);
 
   const deleteTranscript = useCallback((id: string) => {
     setTranscripts((prev) => prev.filter((item) => item.id !== id));
@@ -593,6 +605,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     activeSpeakerName,
     isStarting,
     isSpeaking,
+    isStopping,
     isSomeoneSpeaking: !!activeSpeakerId,
     interimSource,
     interimTarget,

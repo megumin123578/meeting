@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Volume2, Copy, Check, Trash2, Loader2, Sparkles } from 'lucide-react';
+import { Copy, Check, Trash2, Loader2, Sparkles, Volume2 } from 'lucide-react';
 import type { TranscriptItem } from '../hooks/useTranslator';
 import { Flag, getLanguageName } from './LanguageSelector';
 
@@ -95,42 +95,17 @@ export const TranscriptCard: React.FC<TranscriptCardProps> = ({
                 <span className="team-message-langchip team-message-langchip-accent">
                   Dịch · <span className="font-mono">{item.targetLang.split('-')[0].toUpperCase()}</span>
                 </span>
-                <div className="team-message-actions">
-                  <button
-                    className={`btn btn-secondary audio-play-btn ${isOriginalPlaying ? 'playing' : ''}`}
-                    onClick={() => speakOriginal(item.originalText, item.sourceLang, item.id)}
-                    disabled={!!playingCardId && !isOriginalPlaying}
-                  >
-                    <Volume2 size={12} className={isOriginalPlaying ? 'animate-pulse' : ''} />
-                    {isOriginalPlaying ? 'Đang phát...' : 'Nghe gốc'}
-                  </button>
-                  <button
-                    className="team-message-icon-btn"
-                    onClick={handleCopyTranslated}
-                    title="Sao chép bản dịch"
-                  >
-                    {copiedTranslated ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
-                  </button>
-                </div>
+                <button
+                  className="team-message-icon-btn"
+                  onClick={handleCopyTranslated}
+                  title="Sao chép bản dịch"
+                >
+                  {copiedTranslated ? <Check size={12} style={{ color: 'var(--color-success)' }} /> : <Copy size={12} />}
+                </button>
               </div>
               <p className="team-message-text team-message-text-translated">{item.translatedText}</p>
 
               <div className="team-message-actions team-message-actions-bottom">
-                <button
-                  className={`btn btn-primary audio-play-btn ${isAIPlaying ? 'playing' : ''}`}
-                  onClick={() => speakAI(item.translatedText, item.targetLang, item.id)}
-                  disabled={!!playingCardId && !isAIPlaying}
-                  style={{
-                    boxShadow: isAIPlaying ? '0 0 10px rgba(99, 102, 241, 0.4)' : undefined,
-                  }}
-                >
-                  {isAILoading ? (
-                    <Loader2 size={12} className="animate-spin" />
-                  ) : (
-                    <Volume2 size={12} className={isAIPlaying ? 'animate-pulse' : ''} />
-                  )}
-                  {isAIPlaying ? 'Đang phát...' : 'Nghe AI'}
-                </button>
                 <button
                   onClick={() => onDelete(item.id)}
                   className="team-message-icon-btn team-message-delete"

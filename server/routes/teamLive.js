@@ -10,6 +10,7 @@ const { buildSetupMessage } = require('./liveTranslate');
 const DEFAULT_MODEL = 'gemini-3.5-live-translate-preview';
 const rooms = new Map();
 const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
+const STOP_GRACE_MS = 1200;
 
 function send(client, payload) {
   if (client.readyState !== WebSocket.OPEN) return;
@@ -53,6 +54,41 @@ function roomState(room) {
   };
 }
 
+function finalizeSpeaker(room, reason = 'speaker stopped') {
+  if (room.stopTimer) {
+    clearTimeout(room.stopTimer);
+    room.stopTimer = null;
+  }
+  room.stopRequested = false;
+  room.stopReason = '';
+
+  const upstream = room.upstream;
+  room.upstream = null;
+  room.activeSpeakerId = null;
+
+  if (upstream) {
+    try {
+      upstream.close();
+    } catch {}
+  }
+
+  broadcast(room, { type: 'speaker_stopped', reason });
+  broadcast(room, roomState(room));
+}
+
+function requestSpeakerStop(room, reason = 'speaker stopped') {
+  room.stopRequested = true;
+  room.stopReason = reason;
+
+  if (room.stopTimer) {
+    clearTimeout(room.stopTimer);
+  }
+
+  room.stopTimer = setTimeout(() => {
+    finalizeSpeaker(room, room.stopReason || reason);
+  }, STOP_GRACE_MS);
+}
+
 function joinRoom(client, user, room, apiKey) {
   if (room.emptyRoomTimer) {
     clearTimeout(room.emptyRoomTimer);
@@ -75,15 +111,7 @@ function joinRoom(client, user, room, apiKey) {
 }
 
 function stopSpeaker(room, reason = 'speaker stopped') {
-  if (room.upstream) {
-    try {
-      room.upstream.close();
-    } catch {}
-  }
-  room.upstream = null;
-  room.activeSpeakerId = null;
-  broadcast(room, { type: 'speaker_stopped', reason });
-  broadcast(room, roomState(room));
+  finalizeSpeaker(room, reason);
 }
 
 function startSpeaker(room, participant) {
@@ -100,6 +128,12 @@ function startSpeaker(room, participant) {
     return;
   }
   room.activeSpeakerId = participant.id;
+  room.stopRequested = false;
+  room.stopReason = '';
+  if (room.stopTimer) {
+    clearTimeout(room.stopTimer);
+    room.stopTimer = null;
+  }
   const upstreamUrl =
     `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(participant.apiKey)}`;
 
@@ -127,6 +161,12 @@ function startSpeaker(room, participant) {
 
   upstream.on('message', (data) => {
     const text = Buffer.isBuffer(data) ? data.toString('utf8') : String(data);
+    let turnComplete = false;
+    try {
+      const parsed = JSON.parse(text);
+      const content = parsed.serverContent || parsed.server_content;
+      turnComplete = !!(content && (content.turnComplete || content.turn_complete));
+    } catch {}
     broadcast(room, {
       type: 'live_message',
       speakerId: participant.id,
@@ -135,12 +175,21 @@ function startSpeaker(room, participant) {
       targetLang,
       data: text,
     });
+    if (turnComplete && room.stopRequested) {
+      finalizeSpeaker(room, room.stopReason || 'speaker stopped');
+    }
   });
 
   upstream.on('close', (code, reason) => {
     if (room.upstream !== upstream) return;
     room.upstream = null;
     room.activeSpeakerId = null;
+    room.stopRequested = false;
+    room.stopReason = '';
+    if (room.stopTimer) {
+      clearTimeout(room.stopTimer);
+      room.stopTimer = null;
+    }
     broadcast(room, {
       type: 'speaker_stopped',
       reason: `upstream closed (${code}): ${reason}`,
@@ -200,10 +249,34 @@ function attachTeamLive(server) {
   wss.on('connection', (client, req) => {
     const reqUrl = new URL(req.url, `http://${req.headers.host}`);
     const token = reqUrl.searchParams.get('token');
+    client.isAlive = true;
+
+    const heartbeat = setInterval(() => {
+      if (client.readyState !== WebSocket.OPEN) {
+        clearInterval(heartbeat);
+        return;
+      }
+      if (!client.isAlive) {
+        try {
+          client.terminate();
+        } catch {}
+        clearInterval(heartbeat);
+        return;
+      }
+      client.isAlive = false;
+      try {
+        client.ping();
+      } catch {}
+    }, 30000);
+
+    client.on('pong', () => {
+      client.isAlive = true;
+    });
 
     if (!token) {
       send(client, { type: 'error', error: 'Missing auth token' });
       client.close(4401, 'Missing auth token');
+      clearInterval(heartbeat);
       return;
     }
 
@@ -216,6 +289,7 @@ function attachTeamLive(server) {
     if (!user) {
       send(client, { type: 'error', error: 'Invalid token' });
       client.close(4401, 'Invalid token');
+      clearInterval(heartbeat);
       return;
     }
 
@@ -241,7 +315,7 @@ function attachTeamLive(server) {
           send(client, { type: 'error', error: 'Hãy chọn hai ngôn ngữ khác nhau cho phòng.' });
           return;
         }
-        const room = {
+      const room = {
           id: makeRoomId(),
           sourceLang,
           targetLang,
@@ -249,6 +323,9 @@ function attachTeamLive(server) {
           participants: new Map(),
           activeSpeakerId: null,
           upstream: null,
+          stopTimer: null,
+          stopRequested: false,
+          stopReason: '',
           emptyRoomTimer: null,
         };
         rooms.set(room.id, room);
@@ -292,7 +369,7 @@ function attachTeamLive(server) {
       }
 
       if (msg.type === 'speaker_stop') {
-        if (room.activeSpeakerId === participant.id) stopSpeaker(room);
+        if (room.activeSpeakerId === participant.id) requestSpeakerStop(room, 'speaker stopped');
         return;
       }
 
@@ -316,6 +393,7 @@ function attachTeamLive(server) {
       console.warn('[team-live] client error:', err.message);
       leaveCurrentRoom(client);
     });
+    client.on('close', () => clearInterval(heartbeat));
   });
 
   return wss;

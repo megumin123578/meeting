@@ -77,6 +77,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
   const team = useTeamLive({ token, voiceEnabled, onShowToast });
   const isThisClientSpeaking = team.activeSpeakerId === team.clientId && team.isSpeaking;
+  const isThisClientFinalizing = team.activeSpeakerId === team.clientId && team.isStopping;
   const canSpeak = team.connected && (!team.activeSpeakerId || team.activeSpeakerId === team.clientId);
   const participantCount = team.participants.length;
   const languagePopupVisible = team.connected && (!team.myLanguage || languagePopupOpen);
@@ -106,7 +107,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.code !== pttKey || e.repeat) return;
       if (isTypingTarget(e.target)) return;
-      if (isPttActiveRef.current || team.isStarting || !canSpeak || !team.myLanguage) return;
+      if (isPttActiveRef.current || team.isStarting || team.isStopping || !canSpeak || !team.myLanguage) return;
       e.preventDefault();
       isPttActiveRef.current = true;
       void team.startSpeaking('mic');
@@ -389,49 +390,61 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
           </div>
 
           <div className="conversation-composer team-conversation-composer">
-            {usePtt ? (
+      {usePtt ? (
               <button
                 type="button"
                 className="btn btn-primary record-btn"
                 style={{
-                  background: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.3)' : undefined,
-                  borderColor: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.5)' : undefined,
-                  boxShadow: isThisClientSpeaking ? '0 0 15px rgba(239, 68, 68, 0.3)' : undefined,
+                  background: (isThisClientSpeaking || isThisClientFinalizing) ? 'rgba(239, 68, 68, 0.3)' : undefined,
+                  borderColor: (isThisClientSpeaking || isThisClientFinalizing) ? 'rgba(239, 68, 68, 0.5)' : undefined,
+                  boxShadow: (isThisClientSpeaking || isThisClientFinalizing) ? '0 0 15px rgba(239, 68, 68, 0.3)' : undefined,
                 }}
-                disabled={team.isStarting || !canSpeak || !team.myLanguage}
+                disabled={team.isStarting || team.isStopping || !canSpeak || !team.myLanguage}
               >
                 {team.isStarting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : team.isStopping ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : (
                   <Mic size={18} />
                 )}
-                {isThisClientSpeaking ? `Đang thu... Nhả ${displayKey(pttKey)} để dừng` : `Giữ phím ${displayKey(pttKey)} để nói`}
+                {team.isStopping
+                  ? 'Đang chốt...'
+                  : isThisClientSpeaking
+                    ? `Đang thu... Nhả ${displayKey(pttKey)} để dừng`
+                    : `Giữ phím ${displayKey(pttKey)} để nói`}
               </button>
             ) : (
               <button
                 type="button"
-                className={`btn ${isThisClientSpeaking ? 'btn-secondary' : 'btn-primary'} record-btn`}
+                className={`btn ${(isThisClientSpeaking || isThisClientFinalizing) ? 'btn-secondary' : 'btn-primary'} record-btn`}
                 style={{
                   fontWeight: 'bold',
-                  background: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.2)' : undefined,
-                  borderColor: isThisClientSpeaking ? 'rgba(239, 68, 68, 0.4)' : undefined,
-                  color: isThisClientSpeaking ? '#ef4444' : undefined,
-                  boxShadow: isThisClientSpeaking ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
+                  background: (isThisClientSpeaking || isThisClientFinalizing) ? 'rgba(239, 68, 68, 0.2)' : undefined,
+                  borderColor: (isThisClientSpeaking || isThisClientFinalizing) ? 'rgba(239, 68, 68, 0.4)' : undefined,
+                  color: (isThisClientSpeaking || isThisClientFinalizing) ? '#ef4444' : undefined,
+                  boxShadow: (isThisClientSpeaking || isThisClientFinalizing) ? '0 0 15px rgba(239, 68, 68, 0.25)' : undefined,
                 }}
                 onClick={() => {
                   if (isThisClientSpeaking) team.stopSpeaking();
                   else void team.startSpeaking('mic');
                 }}
-                disabled={!canSpeak || team.isStarting || !team.myLanguage}
+                disabled={!canSpeak || team.isStarting || team.isStopping || !team.myLanguage}
               >
                 {team.isStarting ? (
+                  <Loader2 size={18} className="animate-spin" />
+                ) : team.isStopping ? (
                   <Loader2 size={18} className="animate-spin" />
                 ) : isThisClientSpeaking ? (
                   <Square size={18} fill="currentColor" />
                 ) : (
                   <Mic size={18} />
                 )}
-                {isThisClientSpeaking ? 'Dừng nói' : team.myLanguage ? 'Bắt đầu nói' : 'Chọn ngôn ngữ trước'}
+                {team.isStopping
+                  ? 'Đang chốt...'
+                  : isThisClientSpeaking
+                    ? 'Dừng nói'
+                    : team.myLanguage ? 'Bắt đầu nói' : 'Chọn ngôn ngữ trước'}
               </button>
             )}
           </div>
