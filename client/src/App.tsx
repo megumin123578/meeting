@@ -346,10 +346,6 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     isKeyValid === 'valid' ? 'ok' :
     isKeyValid === 'invalid' ? 'err' :
     isKeyValid === 'checking' ? 'pending' : 'idle';
-  const ttsDot =
-    ttsStatus === 'ready' ? 'ok' :
-    ttsStatus === 'error' ? 'err' :
-    ttsStatus === 'checking' ? 'pending' : 'idle';
 
   const isActive =
     mode === 'live' ? isLive : mode === 'realtime' ? isListening : isRecording;
@@ -373,13 +369,16 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     <>
       <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
       <div className="app-topbar-settings">
+        <span className="user-chip topbar-user-chip" title="Tài khoản đang đăng nhập">
+          <User size={12} />
+          <strong>{user.username}</strong>
+        </span>
         <button
           className="status-pill-group topbar-status"
           onClick={() => setShowSettings((v) => !v)}
           title="Trạng thái kết nối — bấm để mở cài đặt"
         >
-          <span className={`status-pill ${keyDot}`}>Gemini</span>
-          <span className={`status-pill ${ttsDot}`}>TTS</span>
+          <span className={`status-pill ${keyDot}`}>API</span>
         </button>
         <button
           className="topbar-icon-btn"

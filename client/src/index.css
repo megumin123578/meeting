@@ -758,6 +758,17 @@ h1, h2, h3, h4, h5, h6 {
   font-weight: 500;
 }
 
+.topbar-user-chip {
+  max-width: 12rem;
+  min-width: 0;
+}
+
+.topbar-user-chip strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .logout-btn {
   display: inline-flex;
   align-items: center;
