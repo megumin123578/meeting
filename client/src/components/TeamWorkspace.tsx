@@ -8,6 +8,7 @@ import {
   Radio,
   Settings2,
   Square,
+  Trash2,
   UserPlus,
   Users,
   Volume2,
@@ -80,11 +81,28 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join' | null>(null);
   const [languagePopupOpen, setLanguagePopupOpen] = useState(false);
   const [restoringRoomId, setRestoringRoomId] = useState('');
+  const [recentRooms, setRecentRooms] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(`team_recent_rooms:${userId}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(parsed)) return [];
+      return Array.from(
+        new Set(
+          parsed
+            .filter((roomId) => typeof roomId === 'string' && roomId.trim())
+            .map((roomId) => roomId.trim().toUpperCase())
+        )
+      ).slice(0, 6);
+    } catch {
+      return [];
+    }
+  });
   const isPttActiveRef = useRef(false);
   const restoreAttemptRef = useRef(0);
   const restoreFailedRef = useRef(false);
   const restoredLanguageRef = useRef<string>('');
   const roomStorageKey = `team_last_room_id:${userId}`;
+  const recentRoomsKey = `team_recent_rooms:${userId}`;
   const roomLanguageKey = useCallback((roomId: string) => `team_room_language:${userId}:${roomId}`, [userId]);
   const syncRoomUrl = useCallback((roomId: string) => {
     const url = new URL(window.location.href);
@@ -98,6 +116,40 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     if (roomId) localStorage.removeItem(roomLanguageKey(roomId));
     syncRoomUrl('');
   }, [roomLanguageKey, roomStorageKey, syncRoomUrl]);
+  const abortRestore = useCallback((roomId?: string) => {
+    restoreAttemptRef.current += 1;
+    restoreFailedRef.current = true;
+    setRestoringRoomId('');
+    if (roomId) clearRoomPersistence(roomId);
+  }, [clearRoomPersistence]);
+  const upsertRecentRoom = useCallback((roomId: string) => {
+    const normalized = roomId.trim().toUpperCase();
+    if (!normalized) return;
+    setRecentRooms((prev) => {
+      const next = [normalized, ...prev.filter((item) => item !== normalized)].slice(0, 6);
+      try {
+        localStorage.setItem(recentRoomsKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, [recentRoomsKey]);
+  const removeRecentRoom = useCallback((roomId: string) => {
+    const normalized = roomId.trim().toUpperCase();
+    if (!normalized) return;
+    setRecentRooms((prev) => {
+      const next = prev.filter((item) => item !== normalized);
+      try {
+        localStorage.setItem(recentRoomsKey, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, [recentRoomsKey]);
+  const getInviteLink = useCallback((roomId: string) => {
+    if (!roomId) return '';
+    const url = new URL(window.location.href);
+    url.searchParams.set('room', roomId);
+    return url.toString();
+  }, []);
 
   const team = useTeamLive({ token, voiceEnabled, onShowToast });
   const isThisClientSpeaking = team.activeSpeakerId === team.clientId && team.isSpeaking;
@@ -124,7 +176,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     localStorage.setItem(roomStorageKey, team.roomId);
     sessionStorage.setItem(roomStorageKey, team.roomId);
     syncRoomUrl(team.roomId);
-  }, [roomStorageKey, team.connected, team.roomId]);
+    upsertRecentRoom(team.roomId);
+  }, [roomStorageKey, team.connected, team.roomId, syncRoomUrl, upsertRecentRoom]);
 
   useEffect(() => {
     if (!team.connected) return;
@@ -159,13 +212,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
 
     const timer = window.setTimeout(() => {
       if (restoreAttemptRef.current !== attempt || team.connected) return;
-      void team.joinRoom(savedRoomId);
+      void team.joinRoom(savedRoomId).catch(() => {
+        if (restoreAttemptRef.current !== attempt) return;
+        abortRestore(savedRoomId);
+        onShowToast('Không nối lại được phòng đã lưu.');
+      });
     }, 0);
 
     const timeout = window.setTimeout(() => {
       if (restoreAttemptRef.current !== attempt || team.connected) return;
-      restoreFailedRef.current = true;
-      setRestoringRoomId('');
+      abortRestore(savedRoomId);
       onShowToast('Không nối lại được phòng đã lưu.');
     }, 8000);
 
@@ -173,7 +229,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       window.clearTimeout(timer);
       window.clearTimeout(timeout);
     };
-  }, [onShowToast, roomStorageKey, team.connected, team.joinRoom]);
+  }, [abortRestore, onShowToast, roomStorageKey, team.connected, team.joinRoom]);
 
   useEffect(() => {
     if (!team.connected || !team.roomId || team.myLanguage) return;
@@ -232,13 +288,21 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       onShowToast('⚠️ Hãy chọn hai ngôn ngữ khác nhau cho phòng.');
       return;
     }
-    await team.createRoom({ sourceLang, targetLang, model });
+    try {
+      await team.createRoom({ sourceLang, targetLang, model });
+    } catch (err: any) {
+      onShowToast(`Không tạo được phòng: ${err?.message || 'lỗi không xác định'}`);
+    }
   };
 
   const joinRoom = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!joinId.trim()) return;
-    await team.joinRoom(joinId);
+    try {
+      await team.joinRoom(joinId);
+    } catch (err: any) {
+      onShowToast(`Không vào được phòng: ${err?.message || 'lỗi không xác định'}`);
+    }
   };
 
   const copyRoomId = async () => {
@@ -248,6 +312,16 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
       onShowToast('Đã sao chép mã phòng.');
     } catch {
       onShowToast('Không sao chép được mã phòng.');
+    }
+  };
+
+  const copyInviteLink = async () => {
+    if (!team.roomId) return;
+    try {
+      await navigator.clipboard.writeText(getInviteLink(team.roomId));
+      onShowToast('Đã sao chép link mời.');
+    } catch {
+      onShowToast('Không sao chép được link mời.');
     }
   };
 
@@ -261,6 +335,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
               <Loader2 size={42} className="animate-spin empty-state-icon" />
               <h3>Đang nối lại phòng</h3>
               <p>{restoringRoomId}</p>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => abortRestore(restoringRoomId)}
+              >
+                Bỏ qua và vào lobby
+              </button>
             </div>
           </section>
         </div>
@@ -332,6 +413,58 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 Tham gia
               </button>
             </form>
+          )}
+
+          {lobbyMode === 'join' && recentRooms.length > 0 && (
+            <section className="team-recent-rooms">
+              <div className="team-lobby-subtitle">
+                <Users size={14} />
+                <strong>Phòng gần đây</strong>
+              </div>
+              <div className="team-recent-room-list">
+                {recentRooms.map((roomId) => (
+                  <div key={roomId} className="team-recent-room-item">
+                      <strong className="team-room-id">{roomId}</strong>
+                    <div className="team-recent-room-actions">
+                      <button
+                        type="button"
+                        className="btn btn-secondary team-recent-room-btn"
+                        onClick={() => {
+                          void team.joinRoom(roomId).catch((err: any) => {
+                            onShowToast(`Không vào được phòng: ${err?.message || 'lỗi không xác định'}`);
+                          });
+                        }}
+                      >Vào phòng
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar-icon-btn"
+                        onClick={() => removeRecentRoom(roomId)}
+                        title="Xóa khỏi danh sách"
+                        aria-label={`Xóa phòng ${roomId} khỏi danh sách gần đây`}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        className="topbar-icon-btn"
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(getInviteLink(roomId));
+                            onShowToast('Đã sao chép link mời.');
+                          } catch {
+                            onShowToast('Không sao chép được link mời.');
+                          }
+                        }}
+                        title="Sao chép link mời"
+                      >
+                        <Clipboard size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           )}
         </section>
       </div>
@@ -426,6 +559,9 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                 </div>
                 <button className="topbar-icon-btn" onClick={copyRoomId} title="Sao chép mã phòng">
                   <Clipboard size={15} />
+                </button>
+                <button className="topbar-icon-btn" onClick={copyInviteLink} title="Sao chép link mời">
+                  <UserPlus size={15} />
                 </button>
               </div>
             </div>

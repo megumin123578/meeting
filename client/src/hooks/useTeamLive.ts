@@ -105,6 +105,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   const playHeadRef = useRef(0);
   const readyResolverRef = useRef<(() => void) | null>(null);
   const readyRejecterRef = useRef<((err: Error) => void) | null>(null);
+  const joinResolverRef = useRef<(() => void) | null>(null);
+  const joinRejecterRef = useRef<((err: Error) => void) | null>(null);
+  const joinCompletedRef = useRef(false);
+  const connectAttemptRef = useRef(0);
   const manualCloseRef = useRef(false);
   const voiceEnabledRef = useRef(voiceEnabled);
   const turnSourceRef = useRef('');
@@ -193,6 +197,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   }, []);
 
   const resetRoomState = useCallback(() => {
+    joinCompletedRef.current = false;
     setRoomId('');
     setClientId('');
     setConnected(false);
@@ -213,6 +218,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
   }, []);
 
   const disconnect = useCallback(() => {
+    connectAttemptRef.current += 1;
+    joinCompletedRef.current = false;
+    joinResolverRef.current = null;
+    joinRejecterRef.current = null;
     manualCloseRef.current = true;
     cleanupCapture();
     cleanupPlayback();
@@ -331,6 +340,10 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     if (msg.type === 'connected') {
       setClientId(msg.clientId || '');
       clientIdRef.current = msg.clientId || '';
+      joinCompletedRef.current = true;
+      joinResolverRef.current?.();
+      joinResolverRef.current = null;
+      joinRejecterRef.current = null;
       return;
     }
 
@@ -417,6 +430,11 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
 
     if (msg.type === 'error') {
       onShowToast(`Team: ${msg.error || 'lỗi'}`);
+      if (!joinCompletedRef.current) {
+        joinRejecterRef.current?.(new Error(msg.error || 'Lỗi phòng Team'));
+        joinResolverRef.current = null;
+        joinRejecterRef.current = null;
+      }
       readyRejecterRef.current?.(new Error(msg.error || 'Lỗi phòng Team'));
       readyResolverRef.current = null;
       readyRejecterRef.current = null;
@@ -433,6 +451,9 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
 
     disconnect();
     manualCloseRef.current = false;
+    joinCompletedRef.current = false;
+    const attempt = connectAttemptRef.current + 1;
+    connectAttemptRef.current = attempt;
     const url = new URL('/ws/team-live', window.location.origin.replace(/^http/, 'ws'));
     url.searchParams.set('token', token);
 
@@ -440,12 +461,17 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     wsRef.current = ws;
 
     ws.onmessage = (ev) => {
+      if (connectAttemptRef.current !== attempt) return;
       if (typeof ev.data === 'string') handleMessage(ev.data);
       else if (ev.data instanceof ArrayBuffer) handleMessage(new TextDecoder('utf-8').decode(ev.data));
       else if (typeof Blob !== 'undefined' && ev.data instanceof Blob) ev.data.text().then(handleMessage).catch(() => {});
     };
-    ws.onerror = () => onShowToast('Mất kết nối Team.');
+    ws.onerror = () => {
+      if (connectAttemptRef.current !== attempt) return;
+      onShowToast('Mất kết nối Team.');
+    };
     ws.onclose = () => {
+      if (connectAttemptRef.current !== attempt) return;
       cleanupCapture();
       cleanupPlayback();
       if (!manualCloseRef.current) {
@@ -455,15 +481,29 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     };
 
     await new Promise<void>((resolve, reject) => {
-      const t = window.setTimeout(() => reject(new Error('Kết nối phòng quá thời gian chờ')), 8000);
-      ws.onopen = () => {
+      const t = window.setTimeout(() => {
+        if (joinCompletedRef.current) return;
+        reject(new Error('Kết nối phòng quá thời gian chờ'));
+      }, 8000);
+      joinResolverRef.current = () => {
+        if (connectAttemptRef.current !== attempt) return;
         window.clearTimeout(t);
-        ws.send(JSON.stringify(initialMessage));
         resolve();
       };
-      ws.addEventListener('close', () => {
+      joinRejecterRef.current = (err) => {
+        if (connectAttemptRef.current !== attempt) return;
         window.clearTimeout(t);
-        reject(new Error('Kết nối phòng bị đóng trước khi mở'));
+        reject(err);
+      };
+      ws.onopen = () => {
+        if (connectAttemptRef.current !== attempt) return;
+        ws.send(JSON.stringify(initialMessage));
+      };
+      ws.addEventListener('close', () => {
+        if (connectAttemptRef.current !== attempt) return;
+        window.clearTimeout(t);
+        if (joinCompletedRef.current) return;
+        reject(new Error('Kết nối phòng bị đóng trước khi vào phòng'));
       }, { once: true });
     });
   }, [cleanupCapture, cleanupPlayback, disconnect, handleMessage, onShowToast, resetRoomState, token]);
