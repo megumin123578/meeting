@@ -18,7 +18,7 @@ function safeCloseClient(client, code, reason) {
   } catch {}
 }
 
-function buildSetupMessage({ model, targetLang, echo }) {
+function buildSetupMessage({ model, targetLang }) {
   // Google expects ISO language tag (e.g. "vi" not "vi-VN")
   const target = (targetLang || 'en').split('-')[0].toLowerCase();
   // Per Live API reference: inputAudioTranscription / outputAudioTranscription are
@@ -33,7 +33,7 @@ function buildSetupMessage({ model, targetLang, echo }) {
         responseModalities: ['AUDIO'],
         translationConfig: {
           targetLanguageCode: target,
-          echoTargetLanguage: echo !== false,
+          echoTargetLanguage: false,
         },
       },
     },
@@ -85,7 +85,7 @@ function attachLiveTranslate(server) {
       upstream = new WebSocket(upstreamUrl);
 
       upstream.on('open', () => {
-        const setupMsg = buildSetupMessage({ model, targetLang, echo: true });
+        const setupMsg = buildSetupMessage({ model, targetLang });
         upstream.send(JSON.stringify(setupMsg));
         try {
           client.send(JSON.stringify({ type: 'ready', sourceLang, targetLang, model }));

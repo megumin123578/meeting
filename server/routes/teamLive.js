@@ -172,7 +172,6 @@ function startSpeaker(room, participant) {
     upstream.send(JSON.stringify(buildSetupMessage({
       model: room.model,
       targetLang,
-      echo: true,
     })));
     broadcast(room, {
       type: 'speaker_started',
