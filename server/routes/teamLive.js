@@ -9,6 +9,7 @@ const { buildSetupMessage } = require('./liveTranslate');
 
 const DEFAULT_MODEL = 'gemini-3.5-live-translate-preview';
 const rooms = new Map();
+const EMPTY_ROOM_TTL_MS = 5 * 60 * 1000;
 
 function send(client, payload) {
   if (client.readyState !== WebSocket.OPEN) return;
@@ -53,6 +54,10 @@ function roomState(room) {
 }
 
 function joinRoom(client, user, room, apiKey) {
+  if (room.emptyRoomTimer) {
+    clearTimeout(room.emptyRoomTimer);
+    room.emptyRoomTimer = null;
+  }
   const participant = {
     id: crypto.randomUUID(),
     userId: user.id,
@@ -168,7 +173,12 @@ function leaveCurrentRoom(client) {
         room.upstream.close();
       } catch {}
     }
-    rooms.delete(room.id);
+    room.emptyRoomTimer = setTimeout(() => {
+      if (room.participants.size === 0) {
+        rooms.delete(room.id);
+      }
+      room.emptyRoomTimer = null;
+    }, EMPTY_ROOM_TTL_MS);
     return;
   }
 
@@ -239,6 +249,7 @@ function attachTeamLive(server) {
           participants: new Map(),
           activeSpeakerId: null,
           upstream: null,
+          emptyRoomTimer: null,
         };
         rooms.set(room.id, room);
         joinRoom(client, user, room, apiKey);
