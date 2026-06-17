@@ -365,9 +365,17 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
     </div>
   );
 
+  const [teamTopbarWave, setTeamTopbarWave] = useState<{ isRecording: boolean; analyser: AnalyserNode | null }>({
+    isRecording: false,
+    analyser: null,
+  });
+
+  const topbarWaveIsRecording = isTeamPage ? teamTopbarWave.isRecording : isActive;
+  const topbarWaveAnalyser = isTeamPage ? teamTopbarWave.analyser : activeAnalyser;
+
   const appTopbarContent = (
     <>
-      <WaveAnimation isRecording={isActive} analyser={activeAnalyser} className="topbar-wave" />
+      <WaveAnimation isRecording={topbarWaveIsRecording} analyser={topbarWaveAnalyser} className="topbar-wave" />
       <div className="app-topbar-settings">
         <span className="user-chip topbar-user-chip" title="Tài khoản đang đăng nhập">
           <User size={12} />
@@ -491,6 +499,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
               speakOriginal={speakOriginal}
               speakAI={speakAI}
               onShowToast={showToast}
+              onWaveStateChange={setTeamTopbarWave}
             />
 
             {toastMessage && (

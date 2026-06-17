@@ -36,6 +36,7 @@ interface TeamWorkspaceProps {
   speakOriginal: (text: string, language: string, cardId: string) => Promise<void>;
   speakAI: (text: string, language: string, cardId: string) => Promise<void>;
   onShowToast: (message: string) => void;
+  onWaveStateChange?: (state: { isRecording: boolean; analyser: AnalyserNode | null }) => void;
 }
 
 const NoopDelete = () => {};
@@ -67,6 +68,7 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   speakOriginal,
   speakAI,
   onShowToast,
+  onWaveStateChange,
 }) => {
   const [joinId, setJoinId] = useState('');
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join' | null>(null);
@@ -79,6 +81,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const participantCount = team.participants.length;
   const languagePopupVisible = team.connected && (!team.myLanguage || languagePopupOpen);
   const usePtt = inputStyle === 'ptt';
+
+  useEffect(() => {
+    onWaveStateChange?.({
+      isRecording: team.isSpeaking,
+      analyser: team.isSpeaking ? team.analyser : null,
+    });
+  }, [onWaveStateChange, team.analyser, team.isSpeaking]);
 
   const chooseLanguage = (lang: string) => {
     team.setParticipantLanguage(lang);
