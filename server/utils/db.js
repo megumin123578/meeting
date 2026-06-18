@@ -485,6 +485,9 @@ const countLiveRoomTranscriptsStmt = db.prepare(`
 const closeLiveRoomExportStmt = db.prepare(`
   UPDATE live_room_exports SET closedAt = @closedAt WHERE id = @id
 `);
+const deleteLiveRoomExportStmt = db.prepare(`
+  DELETE FROM live_room_exports WHERE id = ?
+`);
 
 function insertTranscript(row) {
   insertTranscriptStmt.run(row);
@@ -570,6 +573,11 @@ function closeLiveRoomExport(id, closedAt = new Date().toISOString()) {
   return res.changes > 0 ? findLiveRoomExport(id) : null;
 }
 
+function deleteLiveRoomExport(id) {
+  const res = deleteLiveRoomExportStmt.run(id);
+  return res.changes > 0;
+}
+
 function countLiveRoomTranscripts(exportId) {
   return countLiveRoomTranscriptsStmt.get(exportId).count;
 }
@@ -609,6 +617,7 @@ module.exports = {
   insertLiveRoomTranscript,
   listLiveRoomTranscripts,
   closeLiveRoomExport,
+  deleteLiveRoomExport,
   countLiveRoomTranscripts,
   _db: db,
 };

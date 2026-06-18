@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { History, Loader2, RefreshCw } from 'lucide-react';
+import { History, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { useConfirm } from './ConfirmDialog';
 
 interface ConversationHistoryPageProps {
   token: string;
@@ -51,6 +52,8 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   const [transcripts, setTranscripts] = useState<HistoryTranscript[]>([]);
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const confirm = useConfirm();
 
   const loadRooms = useCallback(async () => {
     setLoading(true);
@@ -92,6 +95,39 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
     }
   }, [onShowToast, token]);
 
+  const deleteSelectedRoom = useCallback(async () => {
+    if (!selectedRoom || deleteLoading) return;
+
+    const ok = await confirm({
+      title: 'Xóa hội thoại',
+      message: `Xóa vĩnh viễn hội thoại ${selectedRoom.roomCode}? Hành động này sẽ xóa toàn bộ transcript liên quan và không thể khôi phục.`,
+      confirmText: 'Xóa',
+      cancelText: 'Hủy',
+      danger: true,
+    });
+
+    if (!ok) return;
+
+    setDeleteLoading(true);
+    try {
+      const res = await fetch(`/api/team-live/history/export/${encodeURIComponent(selectedRoom.id)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'delete history failed');
+
+      onShowToast(`Đã xóa hội thoại ${selectedRoom.roomCode}.`);
+      setSelectedRoom(null);
+      setTranscripts([]);
+      await loadRooms();
+    } catch (err: any) {
+      onShowToast(`❌ ${err?.message || 'Không xóa được hội thoại.'}`);
+    } finally {
+      setDeleteLoading(false);
+    }
+  }, [confirm, deleteLoading, loadRooms, onShowToast, selectedRoom, token]);
+
   useEffect(() => {
     void loadRooms();
   }, [loadRooms]);
@@ -132,7 +168,7 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                       <div>
                         <strong>{room.roomCode}</strong>
                         <span className="admin-dim">
-                          {fmtDate(room.closedAt || room.createdAt)} · {room.transcriptCount} đoạn
+                          {fmtDate(room.createdAt)} → {fmtDate(room.closedAt)} · {room.transcriptCount} đoạn
                         </span>
                       </div>
                       <span className="team-history-chip">
@@ -148,21 +184,21 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
           <div className="team-history-detail">
             {selectedRoom ? (
               <>
-                <div className="team-history-detail-header">
-                  <div>
-                    <div className="team-lobby-subtitle">
-                      <History size={14} />
-                      <strong>{selectedRoom.roomCode}</strong>
-                    </div>
-                    <div className="admin-dim">
-                      {fmtDate(selectedRoom.createdAt)} → {fmtDate(selectedRoom.closedAt)} · {selectedRoom.transcriptCount} đoạn
-                    </div>
+                <div className="team-history-detail-toolbar">
+                  <div className="team-lobby-subtitle">
+                    <History size={14} />
+                    <strong>{selectedRoom.roomCode}</strong>
                   </div>
-                  <div className="team-history-chip">
-                    {selectedRoom.sourceLang.split('-')[0].toUpperCase()} ↔ {selectedRoom.targetLang.split('-')[0].toUpperCase()}
-                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-danger team-history-delete-btn"
+                    onClick={() => void deleteSelectedRoom()}
+                    disabled={deleteLoading || detailLoading}
+                  >
+                    {deleteLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    Xóa hội thoại
+                  </button>
                 </div>
-
                 <div className="team-history-detail-body">
                   {detailLoading ? (
                     <div className="admin-empty compact">

@@ -5,6 +5,8 @@ const {
   listLiveRoomExportsForUser,
   findLiveRoomExportForUserAndRoomCode,
   listLiveRoomTranscripts,
+  findLiveRoomExport,
+  deleteLiveRoomExport,
 } = require('../utils/db');
 
 const router = express.Router();
@@ -84,6 +86,30 @@ router.get('/team-live/history/:roomCode', requireAuth, (req, res) => {
   } catch (err) {
     console.error('team history detail error:', err);
     return res.status(500).json({ error: err.message || 'Không đọc được nội dung hội thoại.' });
+  }
+});
+
+router.delete('/team-live/history/export/:id', requireAuth, (req, res) => {
+  try {
+    const exportId = String(req.params.id || '').trim();
+    if (!exportId) {
+      return res.status(400).json({ error: 'Mã hội thoại không hợp lệ.' });
+    }
+
+    const room = findLiveRoomExport(exportId);
+    if (!room || room.createdByUserId !== req.user.id) {
+      return res.status(404).json({ error: 'Không tìm thấy hội thoại.' });
+    }
+
+    const deleted = deleteLiveRoomExport(exportId);
+    if (!deleted) {
+      return res.status(404).json({ error: 'Không tìm thấy hội thoại.' });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('team history delete error:', err);
+    return res.status(500).json({ error: err.message || 'Không xóa được hội thoại.' });
   }
 });
 
