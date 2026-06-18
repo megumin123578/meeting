@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { History, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { Download, History, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
 import { CustomSelect } from './CustomSelect';
 import { languages } from './LanguageSelector';
 import { useConfirm } from './ConfirmDialog';
+import { EXPORT_FORMATS, downloadExport, type ExportFormat } from '../utils/exportTranscripts';
+import type { TranscriptItem } from '../hooks/useTranslator';
 
 interface ConversationHistoryPageProps {
   token: string;
@@ -58,6 +60,8 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   const [selectedRoom, setSelectedRoom] = useState<HistoryRoom | null>(null);
   const [transcripts, setTranscripts] = useState<HistoryTranscript[]>([]);
   const [viewLang, setViewLang] = useState<'all' | string>('all');
+  const [downloadOpen, setDownloadOpen] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<ExportFormat>('md');
   const [filters, setFilters] = useState<HistoryFilters>({
     state: 'closed',
     lang: '',
@@ -178,6 +182,22 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
     return null;
   };
 
+  const handleDownload = () => {
+    if (!selectedRoom) return;
+    const items: TranscriptItem[] = transcripts.map((item) => ({
+      id: item.id,
+      timestamp: item.createdAt,
+      originalText: item.originalText,
+      translatedText: item.translatedText,
+      sourceLang: item.sourceLang,
+      targetLang: item.targetLang,
+      speakerId: item.speakerId || undefined,
+      speakerName: item.speakerName || undefined,
+    }));
+    downloadExport(selectedRoom.roomCode, items, downloadFormat, activeLanguage || null);
+    setDownloadOpen(false);
+  };
+
   return (
     <div className="app-container team-mode-container">
       <div className="team-workspace team-history-workspace">
@@ -285,6 +305,14 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                     </div>
                     <button
                       type="button"
+                      className="btn btn-secondary team-history-download-btn"
+                      onClick={() => setDownloadOpen(true)}
+                      disabled={detailLoading || transcripts.length === 0}
+                    >
+                      <Download size={14} />
+                    </button>
+                    <button
+                      type="button"
                       className="btn btn-danger team-history-delete-btn"
                       onClick={() => void deleteSelectedRoom()}
                       disabled={deleteLoading || detailLoading}
@@ -341,6 +369,46 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
           </div>
         </section>
       </div>
+
+      {downloadOpen && selectedRoom && (
+        <div className="modal-overlay" onClick={() => setDownloadOpen(false)}>
+          <div className="modal-card team-history-download-modal" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <Download size={18} />
+              <h3 className="modal-title">Chọn định dạng tải xuống</h3>
+              <button
+                type="button"
+                className="topbar-icon-btn team-history-download-close-btn"
+                onClick={() => setDownloadOpen(false)}
+                aria-label="Đóng"
+              >
+                <X size={14} />
+              </button>
+            </div>
+ 
+            <div className="team-history-download-grid">
+              {EXPORT_FORMATS.map((format) => (
+                <button
+                  key={format.value}
+                  type="button"
+                  className={`team-history-download-option ${downloadFormat === format.value ? 'active' : ''}`}
+                  onClick={() => setDownloadFormat(format.value)}
+                >
+                  {format.label}
+                </button>
+              ))}
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="btn btn-secondary" onClick={() => setDownloadOpen(false)}>
+                Huỷ
+              </button>
+              <button type="button" className="btn btn-primary" onClick={handleDownload}>
+                Tải xuống
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -683,6 +683,10 @@ h1, h2, h3, h4, h5, h6 {
   flex-shrink: 0;
 }
 
+.team-history-download-btn {
+  flex-shrink: 0;
+}
+
 .team-history-detail-body {
   flex: 1;
   min-height: 0;
@@ -3008,11 +3012,53 @@ input:checked + .slider:before {
   animation: modal-pop 0.14s ease-out;
 }
 
+.team-history-download-modal {
+  max-width: 420px;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   margin-bottom: 0.6rem;
+}
+
+.team-history-download-modal .modal-header {
+  position: relative;
+  padding-right: 2.2rem;
+}
+
+.team-history-download-close-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+.team-history-download-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.team-history-download-option {
+  width: 100%;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--color-text-primary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.team-history-download-option:hover,
+.team-history-download-option.active {
+  background: rgba(99, 102, 241, 0.14);
+  border-color: rgba(99, 102, 241, 0.35);
+  color: var(--color-text-primary);
 }
 
 /* ---- Admin dashboard ---- */
