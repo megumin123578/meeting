@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Download, History, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { CustomSelect } from './CustomSelect';
-import { languages } from './LanguageSelector';
+import { Flag, getLanguageName, languages } from './LanguageSelector';
 import { useConfirm } from './ConfirmDialog';
 import { EXPORT_FORMATS, downloadExport, type ExportFormat } from '../utils/exportTranscripts';
 import type { TranscriptItem } from '../hooks/useTranslator';
@@ -249,7 +249,13 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                   { value: '', label: 'Tất cả' },
                   ...languages.map((lang) => ({
                     value: lang.code,
-                    label: `${lang.name} (${lang.code})`,
+                    label: (
+                      <span className="team-history-lang-option">
+                        <Flag code={lang.code} />
+                        <span>{getLanguageName(lang.code)}</span>
+                        <span className="team-history-lang-code">({lang.code})</span>
+                      </span>
+                    ),
                   })),
                 ]}
                 onChange={(lang) => setFilters((prev) => ({ ...prev, lang }))}

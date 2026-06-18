@@ -264,6 +264,8 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 0;
   min-height: 0;
   display: flex;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .app-container {
@@ -590,6 +592,23 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   gap: 0.55rem;
   padding: 0.72rem 0.95rem;
+}
+
+.team-history-lang-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.team-history-lang-code {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+}
+
+.custom-select-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .team-history-filter-label {
@@ -1388,6 +1407,27 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+}
+
+.app-brand-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.app-brand-button:hover .app-title,
+.app-brand-button:focus-visible .app-title {
+  filter: brightness(1.08);
+}
+
+.app-brand-button:focus-visible {
+  outline: none;
 }
 
 .logo-icon {

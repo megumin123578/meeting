@@ -3,7 +3,7 @@ import { Check, ChevronDown } from 'lucide-react';
 
 export interface CustomSelectOption {
   value: string;
-  label: string;
+  label: React.ReactNode;
   disabled?: boolean;
 }
 

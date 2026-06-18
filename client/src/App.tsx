@@ -16,7 +16,7 @@ import { LoginPage } from './components/LoginPage';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ConversationHistoryPage } from './components/ConversationHistoryPage';
 import { TeamWorkspace } from './components/TeamWorkspace';
-import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown, History } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, LogOut, User, Users, ClipboardList, Loader2, Settings as SettingsIcon, X, Activity, RefreshCw, ShieldCheck, ChevronDown, History, Sparkles } from 'lucide-react';
 
 export type RecordingMode = 'normal' | 'cabin' | 'realtime' | 'live';
 export type InputStyle = 'toggle' | 'ptt';
@@ -42,6 +42,17 @@ export const App: React.FC = () => {
 
   return <AuthedApp token={token} user={user} onLogout={logout} />;
 };
+
+interface AppBrandButtonProps {
+  onClick: () => void;
+}
+
+const AppBrandButton: React.FC<AppBrandButtonProps> = ({ onClick }) => (
+  <button type="button" className="app-brand-button" onClick={onClick} aria-label="Về trang chủ SpeakLink">
+    <Sparkles size={18} className="logo-icon" />
+    <span className="app-title">SpeakLink</span>
+  </button>
+);
 
 interface ForcePasswordChangePageProps {
   username: string;
@@ -371,7 +382,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
 
   const appTopbarTitle = (
     <div className="app-title-section app-topbar-title-section">
-      <h1 className="app-title app-topbar-title">SpeakLink</h1>
+      <AppBrandButton onClick={() => navigateTo('/')} />
     </div>
   );
 
@@ -441,7 +452,7 @@ const AuthedApp: React.FC<AuthedAppProps> = ({ token, user, onLogout }) => {
           <div className="app-container admin-page-container">
             <header className="app-header">
               <div className="app-title-section">
-                <h1 className="app-title">Admin</h1>
+                <AppBrandButton onClick={() => navigateTo('/')} />
               </div>
               <span className="user-chip">
                 <User size={12} />
