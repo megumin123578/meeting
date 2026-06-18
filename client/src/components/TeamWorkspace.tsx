@@ -153,6 +153,17 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     return url.toString();
   }, []);
 
+  const scrollToLatest = useCallback(() => {
+    const el = transcriptScrollerRef.current;
+    if (!el) return;
+    window.requestAnimationFrame(() => {
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: 'smooth',
+      });
+    });
+  }, []);
+
   const team = useTeamLive({ token, voiceEnabled, onShowToast });
   const isThisClientSpeaking = team.activeSpeakerId === team.clientId && team.isSpeaking;
   const isThisClientFinalizing = team.activeSpeakerId === team.clientId && team.isStopping;
@@ -274,6 +285,13 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [team.roomId]);
 
   useEffect(() => {
+    if (!team.connected || !team.roomId) return;
+    if (!(team.isStarting || team.activeSpeakerId || team.interimSource || team.interimTarget)) return;
+    shouldAutoScrollRef.current = true;
+    scrollToLatest();
+  }, [scrollToLatest, team.activeSpeakerId, team.connected, team.interimSource, team.interimTarget, team.isStarting, team.roomId]);
+
+  useEffect(() => {
     if (!team.connected || !team.roomId || team.myLanguage) return;
     const savedLanguage = localStorage.getItem(roomLanguageKey(team.roomId));
     if (!savedLanguage || restoredLanguageRef.current === team.roomId) return;
@@ -368,17 +386,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   };
 
   useEffect(() => {
-    const el = transcriptScrollerRef.current;
-    if (!el) return;
+    if (!team.connected || !team.roomId) return;
     if (!shouldAutoScrollRef.current) return;
-
-    window.requestAnimationFrame(() => {
-      el.scrollTo({
-        top: el.scrollHeight,
-        behavior: 'smooth',
-      });
-    });
-  }, [team.transcripts.length, team.roomId]);
+    scrollToLatest();
+  }, [scrollToLatest, team.connected, team.roomId, team.transcripts.length]);
 
   const handleTranscriptScroll = () => {
     const el = transcriptScrollerRef.current;

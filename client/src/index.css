@@ -1275,6 +1275,21 @@ h1, h2, h3, h4, h5, h6 {
   letter-spacing: 0.04em;
 }
 
+.settings-api-help {
+  display: inline-flex;
+  color: var(--color-accent-cyan);
+  font-size: 0.78rem;
+  text-decoration: none;
+  margin-top: -0.1rem;
+}
+
+.settings-api-help:hover,
+.settings-api-help:focus-visible {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  outline: none;
+}
+
 .settings-radio-group {
   display: grid;
   grid-template-columns: 1fr 1fr;

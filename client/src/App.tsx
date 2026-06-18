@@ -1012,6 +1012,16 @@ const SettingsPopover: React.FC<SettingsPopoverProps> = ({
 
       <div className="settings-group">
         <label className="settings-label">Google AI Studio API Key</label>
+        {!localKey.trim() && (
+          <a
+            className="settings-api-help"
+            href="https://aistudio.google.com/apikey"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Click vào đây để lấy API key
+          </a>
+        )}
         <div style={{ display: 'flex', gap: '0.5rem' }}>
           <input
             type="password"
