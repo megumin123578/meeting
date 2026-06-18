@@ -556,6 +556,33 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.85rem;
 }
 
+.team-history-topbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.team-history-filter-row {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.team-history-filter-item {
+  flex: 1;
+  min-width: 160px;
+}
+
+.team-history-filter-trigger {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 42px;
+  justify-content: space-between;
+  gap: 0.55rem;
+  padding: 0.72rem 0.95rem;
+}
+
 .team-history-detail {
   min-width: 0;
   padding: 0.25rem 0 0 0.25rem;
@@ -566,12 +593,90 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
 }
 
+.team-history-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.team-history-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.65rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.team-history-toggle-btn {
+  border: 1px solid transparent;
+  border-radius: 0.45rem;
+  background: transparent;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 0.45rem 0.65rem;
+  transition: all 0.15s;
+}
+
+.team-history-toggle-btn:hover,
+.team-history-toggle-btn:focus-visible,
+.team-history-toggle-btn.active {
+  color: var(--color-text-primary);
+  border-color: rgba(99, 102, 241, 0.35);
+  background: rgba(99, 102, 241, 0.14);
+  outline: none;
+}
+
 .team-history-detail-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
   flex-wrap: wrap;
+}
+
+.team-history-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.team-history-view-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.03);
+  gap: 0.2rem;
+}
+
+.team-history-toggle-btn {
+  padding: 0.35rem 0.7rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.team-history-toggle-btn:hover {
+  color: var(--color-text-primary);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.team-history-toggle-btn.active {
+  color: var(--color-text-primary);
+  background: rgba(99, 102, 241, 0.2);
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.15) inset;
 }
 
 .team-history-delete-btn {

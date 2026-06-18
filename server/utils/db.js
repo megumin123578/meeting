@@ -453,17 +453,6 @@ const listLiveRoomExportsByStateStmt = db.prepare(`
   ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
   LIMIT ?
 `);
-const listLiveRoomExportsByUserStmt = db.prepare(`
-  SELECT e.*,
-         (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
-  FROM live_room_exports e
-  WHERE e.createdByUserId = ?
-    AND ((? = 'open' AND e.closedAt IS NULL)
-      OR (? = 'closed' AND e.closedAt IS NOT NULL)
-      OR (? = 'all'))
-  ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
-  LIMIT ?
-`);
 const findLiveRoomExportByUserAndRoomCodeStmt = db.prepare(`
   SELECT e.*,
          (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
@@ -550,10 +539,36 @@ function listLiveRoomExportsForRoom(roomCode) {
   return listLiveRoomExportsByRoomCodeStmt.all(roomCode);
 }
 
-function listLiveRoomExportsForUser(userId, limit = 50, state = 'closed') {
+function listLiveRoomExportsForUser(userId, options = {}) {
+  const {
+    limit = 50,
+    state = 'closed',
+    lang = '',
+  } = options || {};
   const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 200));
   const safeState = state === 'open' || state === 'closed' ? state : state === 'all' ? 'all' : 'closed';
-  return listLiveRoomExportsByUserStmt.all(userId, safeState, safeState, safeState, safeLimit);
+  const conditions = ['e.createdByUserId = ?'];
+  const params = [userId];
+
+  if (safeState !== 'all') {
+    conditions.push(safeState === 'open' ? 'e.closedAt IS NULL' : 'e.closedAt IS NOT NULL');
+  }
+
+  if (lang) {
+    conditions.push('(e.sourceLang = ? OR e.targetLang = ?)');
+    params.push(lang, lang);
+  }
+
+  params.push(safeLimit);
+  const sql = `
+    SELECT e.*,
+           (SELECT COUNT(*) FROM live_room_transcripts t WHERE t.exportId = e.id) AS transcriptCount
+    FROM live_room_exports e
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY COALESCE(e.closedAt, e.createdAt) DESC, e.createdAt DESC
+    LIMIT ?
+  `;
+  return db.prepare(sql).all(...params);
 }
 
 function findLiveRoomExportForUserAndRoomCode(userId, roomCode) {

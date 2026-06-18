@@ -40,7 +40,12 @@ router.get('/team-live/history', requireAuth, (req, res) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 50;
     const state = String(req.query.state || 'closed').toLowerCase();
-    const rooms = listLiveRoomExportsForUser(req.user.id, limit, state);
+    const lang = String(req.query.lang || '').trim();
+    const rooms = listLiveRoomExportsForUser(req.user.id, {
+      limit,
+      state,
+      lang,
+    });
     return res.json({
       rooms: rooms.map((room) => ({
         id: room.id,

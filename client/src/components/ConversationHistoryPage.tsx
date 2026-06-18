@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { History, Loader2, RefreshCw, Trash2 } from 'lucide-react';
+import { CustomSelect } from './CustomSelect';
+import { languages } from './LanguageSelector';
 import { useConfirm } from './ConfirmDialog';
 
 interface ConversationHistoryPageProps {
@@ -31,6 +33,11 @@ interface HistoryTranscript {
   createdAt: string;
 }
 
+interface HistoryFilters {
+  state: 'closed' | 'open' | 'all';
+  lang: string;
+}
+
 const fmtDate = (iso?: string | null) => {
   if (!iso) return '-';
   try {
@@ -50,6 +57,11 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   const [rooms, setRooms] = useState<HistoryRoom[]>([]);
   const [selectedRoom, setSelectedRoom] = useState<HistoryRoom | null>(null);
   const [transcripts, setTranscripts] = useState<HistoryTranscript[]>([]);
+  const [viewLang, setViewLang] = useState<'all' | string>('all');
+  const [filters, setFilters] = useState<HistoryFilters>({
+    state: 'closed',
+    lang: '',
+  });
   const [loading, setLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -58,7 +70,12 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   const loadRooms = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/team-live/history?limit=50&state=closed', {
+      const params = new URLSearchParams();
+      params.set('limit', '200');
+      params.set('state', filters.state);
+      if (filters.lang) params.set('lang', filters.lang);
+
+      const res = await fetch(`/api/team-live/history?${params.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json().catch(() => ({}));
@@ -71,11 +88,11 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
       });
       if (nextRooms.length === 0) setTranscripts([]);
     } catch (err: any) {
-      onShowToast(`❌ ${err?.message || 'Không tải được lịch sử hội thoại.'}`);
+      onShowToast(`${err?.message || 'Không tải được lịch sử hội thoại.'}`);
     } finally {
       setLoading(false);
     }
-  }, [onShowToast, token]);
+  }, [filters, onShowToast, token]);
 
   const loadRoomDetail = useCallback(async (roomCode: string) => {
     setDetailLoading(true);
@@ -89,7 +106,7 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
     } catch (err: any) {
       setSelectedRoom(null);
       setTranscripts([]);
-      onShowToast(`❌ ${err?.message || 'Không tải được nội dung hội thoại.'}`);
+      onShowToast(`${err?.message || 'Không tải được nội dung hội thoại.'}`);
     } finally {
       setDetailLoading(false);
     }
@@ -122,14 +139,17 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
       setTranscripts([]);
       await loadRooms();
     } catch (err: any) {
-      onShowToast(`❌ ${err?.message || 'Không xóa được hội thoại.'}`);
+      onShowToast(`${err?.message || 'Không xóa được hội thoại.'}`);
     } finally {
       setDeleteLoading(false);
     }
   }, [confirm, deleteLoading, loadRooms, onShowToast, selectedRoom, token]);
 
   useEffect(() => {
-    void loadRooms();
+    const timer = window.setTimeout(() => {
+      void loadRooms();
+    }, 250);
+    return () => window.clearTimeout(timer);
   }, [loadRooms]);
 
   useEffect(() => {
@@ -137,23 +157,78 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
     void loadRoomDetail(selectedRoom.roomCode);
   }, [loadRoomDetail, selectedRoom]);
 
+  useEffect(() => {
+    if (filters.lang) {
+      setViewLang(filters.lang);
+      return;
+    }
+
+    if (!selectedRoom || viewLang === 'all') return;
+    if (viewLang !== selectedRoom.sourceLang && viewLang !== selectedRoom.targetLang) {
+      setViewLang('all');
+    }
+  }, [filters.lang, selectedRoom, viewLang]);
+
+  const activeLanguage = filters.lang || (viewLang === 'all' ? '' : viewLang);
+  const activeLanguageCode = activeLanguage ? activeLanguage.split('-')[0].toUpperCase() : '';
+  const getTranscriptTextForLanguage = (item: HistoryTranscript) => {
+    if (!activeLanguage) return null;
+    if (item.sourceLang === activeLanguage) return item.originalText;
+    if (item.targetLang === activeLanguage) return item.translatedText;
+    return null;
+  };
+
   return (
     <div className="app-container team-mode-container">
       <div className="team-workspace team-history-workspace">
         <section className="team-join-panel panel-card team-history-layout">
           <div className="team-history-sidebar">
-            <div className="team-lobby-subtitle team-history-titlebar">
-              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
-              <History size={14} />
-              <strong>Lịch sử hội thoại</strong>
-              {loading && <Loader2 size={14} className="animate-spin" />}
+            <div className="team-history-topbar">
+              <div className="team-history-filter-row">
+                <div className="team-history-filter-item">
+                  <CustomSelect
+                    value={filters.state}
+                    ariaLabel="Lọc theo trạng thái"
+                    triggerClassName="input-control team-history-filter-trigger"
+                    menuClassName="team-history-filter-menu"
+                    options={[
+                      { value: 'closed', label: 'Đã đóng' },
+                      { value: 'open', label: 'Đang mở' },
+                      { value: 'all', label: 'Tất cả' },
+                    ]}
+                    onChange={(state) => setFilters((prev) => ({ ...prev, state: state as HistoryFilters['state'] }))}
+                  />
+                </div>
+                <div className="team-history-filter-item">
+                  <CustomSelect
+                    value={filters.lang}
+                    ariaLabel="Lọc theo ngôn ngữ nguồn"
+                    triggerClassName="input-control team-history-filter-trigger"
+                    menuClassName="team-history-filter-menu"
+                    options={[
+                      { value: '', label: 'Tất cả' },
+                      ...languages.map((lang) => ({
+                        value: lang.code,
+                        label: `${lang.name} (${lang.code})`,
+                      })),
+                    ]}
+                    onChange={(lang) => setFilters((prev) => ({ ...prev, lang }))}
+                  />
+                </div>
               </div>
-              <button type="button" className="topbar-icon-btn" onClick={() => void loadRooms()} title="Tải lại">
-                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-              </button>
+              <div className="team-lobby-subtitle team-history-titlebar">
+                <div className="team-lobby-subtitle">
+                  <History size={14} />
+                  <strong>Lịch sử hội thoại</strong>
+                  {loading && <Loader2 size={14} className="animate-spin" />}
+                </div>
+                <button type="button" className="topbar-icon-btn" onClick={() => void loadRooms()} title="Tải lại">
+                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+                </button>
+              </div>
             </div>
             {rooms.length === 0 ? (
-              <div className="admin-empty compact">Chưa có hội thoại nào đã đóng.</div>
+              <div className="admin-empty compact">Không có hội thoại phù hợp với bộ lọc hiện tại.</div>
             ) : (
               <div className="team-history-list team-history-list-scroll">
                 {rooms.map((room) => {
@@ -167,12 +242,10 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                     >
                       <div>
                         <strong>{room.roomCode}</strong>
-                        <span className="admin-dim">
-                          {fmtDate(room.createdAt)} → {fmtDate(room.closedAt)} · {room.transcriptCount} đoạn
-                        </span>
+                        <span className="admin-dim">{room.transcriptCount} đoạn</span>
                       </div>
                       <span className="team-history-chip">
-                        {room.sourceLang.split('-')[0].toUpperCase()} ↔ {room.targetLang.split('-')[0].toUpperCase()}
+                        {room.sourceLang.split('-')[0].toUpperCase()}
                       </span>
                     </button>
                   );
@@ -189,15 +262,36 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                     <History size={14} />
                     <strong>{selectedRoom.roomCode}</strong>
                   </div>
-                  <button
-                    type="button"
-                    className="btn btn-danger team-history-delete-btn"
-                    onClick={() => void deleteSelectedRoom()}
-                    disabled={deleteLoading || detailLoading}
-                  >
-                    {deleteLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                    Xóa hội thoại
-                  </button>
+                  <div className="team-history-toolbar-actions">
+                    <div className="team-history-view-toggle" role="group" aria-label="Chọn ngôn ngữ hiển thị">
+                      {[
+                        { value: 'all', label: 'Cả hai' },
+                        ...(selectedRoom
+                          ? [selectedRoom.sourceLang, selectedRoom.targetLang]
+                              .filter((lang, index, arr) => arr.indexOf(lang) === index)
+                              .map((lang) => ({ value: lang, label: lang.split('-')[0].toUpperCase() }))
+                          : []),
+                      ].map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          className={`team-history-toggle-btn ${viewLang === option.value ? 'active' : ''}`}
+                          onClick={() => setViewLang(option.value)}
+                          disabled={!!filters.lang && option.value !== filters.lang}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-danger team-history-delete-btn"
+                      onClick={() => void deleteSelectedRoom()}
+                      disabled={deleteLoading || detailLoading}
+                    >
+                      {deleteLoading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    </button>
+                  </div>
                 </div>
                 <div className="team-history-detail-body">
                   {detailLoading ? (
@@ -208,23 +302,36 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                   ) : transcripts.length === 0 ? (
                     <div className="admin-empty compact">Phòng này chưa có transcript.</div>
                   ) : (
-                    transcripts.map((item) => (
-                      <div key={item.id} className="team-history-item">
-                        <div className="admin-detail-stats team-history-meta">
-                          <span><strong>{item.speakerName || 'Unknown speaker'}</strong></span>
-                          <span className="admin-dim">{fmtDate(item.createdAt)}</span>
-                          <span>{item.sourceLang} → {item.targetLang}</span>
+                    transcripts.map((item) => {
+                      const filteredText = getTranscriptTextForLanguage(item);
+                      if (activeLanguage && filteredText === null) return null;
+
+                      return (
+                        <div key={item.id} className="team-history-item">
+                          <div className="admin-detail-stats team-history-meta">
+                            <span><strong>{item.speakerName || 'Unknown speaker'}</strong></span>
+                            <span className="admin-dim">{fmtDate(item.createdAt)}</span>
+                          </div>
+                          {activeLanguage ? (
+                            <div className="team-history-bubble">
+                              <span className="admin-dim">{activeLanguageCode}</span>
+                              <p>{filteredText || 'Hội thoại trống'}</p>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="team-history-bubble">
+                                <span className="admin-dim">{item.sourceLang.split('-')[0].toUpperCase()}</span>
+                                <p>{item.originalText || 'Hội thoại trống'}</p>
+                              </div>
+                              <div className="team-history-bubble">
+                                <span className="admin-dim">{item.targetLang.split('-')[0].toUpperCase()}</span>
+                                <p>{item.translatedText || 'Hội thoại trống'}</p>
+                              </div>
+                            </>
+                          )}
                         </div>
-                        <div className="team-history-bubble">
-                          <span className="admin-dim">Gốc</span>
-                          <p>{item.originalText || 'Hội thoại trống'}</p>
-                        </div>
-                        <div className="team-history-bubble">
-                          <span className="admin-dim">Dịch</span>
-                          <p>{item.translatedText || 'Hội thoại trống'}</p>
-                        </div>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </>
