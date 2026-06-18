@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Download, History, Loader2, RefreshCw, Trash2, X } from 'lucide-react';
+import { Download, History, Loader2, RefreshCw, Search, Trash2, X } from 'lucide-react';
 import { CustomSelect } from './CustomSelect';
 import { languages } from './LanguageSelector';
 import { useConfirm } from './ConfirmDialog';
@@ -62,6 +62,7 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   const [viewLang, setViewLang] = useState<'all' | string>('all');
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<ExportFormat>('md');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState<HistoryFilters>({
     state: 'closed',
     lang: '',
@@ -182,6 +183,25 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
     return null;
   };
 
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const visibleTranscripts = transcripts.filter((item) => {
+    const filteredText = getTranscriptTextForLanguage(item);
+    if (activeLanguage && filteredText === null) return false;
+
+    if (!normalizedSearch) return true;
+    const searchTarget = [
+      item.speakerName,
+      item.originalText,
+      item.translatedText,
+      filteredText || '',
+      item.sourceLang,
+      item.targetLang,
+    ]
+      .join(' ')
+      .toLowerCase();
+    return searchTarget.includes(normalizedSearch);
+  });
+
   const handleDownload = () => {
     if (!selectedRoom) return;
     const items: TranscriptItem[] = transcripts.map((item) => ({
@@ -201,51 +221,65 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
   return (
     <div className="app-container team-mode-container">
       <div className="team-workspace team-history-workspace">
+        <div className="team-history-filter-bar">
+          <div className="team-history-filter-row">
+            <div className="team-history-filter-item">
+              <label className="input-label team-history-filter-label">Trạng thái</label>
+              <CustomSelect
+                value={filters.state}
+                ariaLabel="Lọc theo trạng thái"
+                triggerClassName="input-control team-history-filter-trigger"
+                menuClassName="team-history-filter-menu"
+                options={[
+                  { value: 'closed', label: 'Đã đóng' },
+                  { value: 'open', label: 'Đang mở' },
+                  { value: 'all', label: 'Tất cả' },
+                ]}
+                onChange={(state) => setFilters((prev) => ({ ...prev, state: state as HistoryFilters['state'] }))}
+              />
+            </div>
+            <div className="team-history-filter-item">
+              <label className="input-label team-history-filter-label">Ngôn ngữ</label>
+              <CustomSelect
+                value={filters.lang}
+                ariaLabel="Lọc theo ngôn ngữ nguồn"
+                triggerClassName="input-control team-history-filter-trigger"
+                menuClassName="team-history-filter-menu"
+                options={[
+                  { value: '', label: 'Tất cả' },
+                  ...languages.map((lang) => ({
+                    value: lang.code,
+                    label: `${lang.name} (${lang.code})`,
+                  })),
+                ]}
+                onChange={(lang) => setFilters((prev) => ({ ...prev, lang }))}
+              />
+            </div>
+            <div className="input-group team-history-search-group">
+              <label className="input-label team-history-filter-label">Tìm nội dung hội thoại</label>
+              <div className="team-history-search-wrap">
+                <Search size={13} className="team-history-search-icon" />
+                <input
+                  className="input-control team-history-search-input"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <section className="team-join-panel panel-card team-history-layout">
           <div className="team-history-sidebar">
-            <div className="team-history-topbar">
-              <div className="team-history-filter-row">
-                <div className="team-history-filter-item">
-                  <CustomSelect
-                    value={filters.state}
-                    ariaLabel="Lọc theo trạng thái"
-                    triggerClassName="input-control team-history-filter-trigger"
-                    menuClassName="team-history-filter-menu"
-                    options={[
-                      { value: 'closed', label: 'Đã đóng' },
-                      { value: 'open', label: 'Đang mở' },
-                      { value: 'all', label: 'Tất cả' },
-                    ]}
-                    onChange={(state) => setFilters((prev) => ({ ...prev, state: state as HistoryFilters['state'] }))}
-                  />
-                </div>
-                <div className="team-history-filter-item">
-                  <CustomSelect
-                    value={filters.lang}
-                    ariaLabel="Lọc theo ngôn ngữ nguồn"
-                    triggerClassName="input-control team-history-filter-trigger"
-                    menuClassName="team-history-filter-menu"
-                    options={[
-                      { value: '', label: 'Tất cả' },
-                      ...languages.map((lang) => ({
-                        value: lang.code,
-                        label: `${lang.name} (${lang.code})`,
-                      })),
-                    ]}
-                    onChange={(lang) => setFilters((prev) => ({ ...prev, lang }))}
-                  />
-                </div>
+            <div className="team-lobby-subtitle team-history-titlebar">
+              <div className="team-lobby-subtitle">
+                <History size={14} />
+                <strong>Lịch sử hội thoại</strong>
+                {loading && <Loader2 size={14} className="animate-spin" />}
               </div>
-              <div className="team-lobby-subtitle team-history-titlebar">
-                <div className="team-lobby-subtitle">
-                  <History size={14} />
-                  <strong>Lịch sử hội thoại</strong>
-                  {loading && <Loader2 size={14} className="animate-spin" />}
-                </div>
-                <button type="button" className="topbar-icon-btn" onClick={() => void loadRooms()} title="Tải lại">
-                  <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-                </button>
-              </div>
+              <button type="button" className="topbar-icon-btn" onClick={() => void loadRooms()} title="Tải lại">
+                <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+              </button>
             </div>
             {rooms.length === 0 ? (
               <div className="admin-empty compact">Không có hội thoại phù hợp với bộ lọc hiện tại.</div>
@@ -327,13 +361,13 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                       <Loader2 size={16} className="animate-spin" />
                       Đang tải nội dung...
                     </div>
-                  ) : transcripts.length === 0 ? (
-                    <div className="admin-empty compact">Phòng này chưa có transcript.</div>
+                  ) : visibleTranscripts.length === 0 ? (
+                    <div className="admin-empty compact">
+                      {normalizedSearch ? 'Không tìm thấy nội dung phù hợp.' : 'Phòng này chưa có transcript.'}
+                    </div>
                   ) : (
-                    transcripts.map((item) => {
+                    visibleTranscripts.map((item) => {
                       const filteredText = getTranscriptTextForLanguage(item);
-                      if (activeLanguage && filteredText === null) return null;
-
                       return (
                         <div key={item.id} className="team-history-item">
                           <div className="admin-detail-stats team-history-meta">

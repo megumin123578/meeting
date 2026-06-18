@@ -548,6 +548,11 @@ h1, h2, h3, h4, h5, h6 {
   gap: 0.85rem;
 }
 
+.team-history-filter-bar {
+  width: 100%;
+  margin-bottom: 0.85rem;
+}
+
 .team-history-sidebar,
 .team-history-detail {
   min-height: 0;
@@ -566,11 +571,15 @@ h1, h2, h3, h4, h5, h6 {
   display: flex;
   gap: 0.75rem;
   flex-wrap: wrap;
+  align-items: flex-end;
 }
 
 .team-history-filter-item {
-  flex: 1;
-  min-width: 160px;
+  flex: 1 1 180px;
+  min-width: 180px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
 }
 
 .team-history-filter-trigger {
@@ -581,6 +590,36 @@ h1, h2, h3, h4, h5, h6 {
   justify-content: space-between;
   gap: 0.55rem;
   padding: 0.72rem 0.95rem;
+}
+
+.team-history-filter-label {
+  line-height: 1.2;
+}
+
+.team-history-search-group {
+  flex: 2 1 280px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.team-history-search-wrap {
+  position: relative;
+}
+
+.team-history-search-icon {
+  position: absolute;
+  left: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.team-history-search-input {
+  padding-left: 1.5rem;
 }
 
 .team-history-detail {
