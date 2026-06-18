@@ -155,7 +155,7 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                       <strong>{selectedRoom.roomCode}</strong>
                     </div>
                     <div className="admin-dim">
-                      {fmtDate(selectedRoom.createdAt)} · Đã đóng: {fmtDate(selectedRoom.closedAt)} · {selectedRoom.transcriptCount} đoạn
+                      {fmtDate(selectedRoom.createdAt)} → {fmtDate(selectedRoom.closedAt)} · {selectedRoom.transcriptCount} đoạn
                     </div>
                   </div>
                   <div className="team-history-chip">

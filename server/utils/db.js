@@ -477,7 +477,7 @@ const insertLiveRoomTranscriptStmt = db.prepare(`
   VALUES (@id, @exportId, @roomCode, @speakerId, @speakerName, @originalText, @translatedText, @sourceLang, @targetLang, @createdAt)
 `);
 const listLiveRoomTranscriptsStmt = db.prepare(`
-  SELECT * FROM live_room_transcripts WHERE exportId = ? ORDER BY createdAt DESC
+  SELECT * FROM live_room_transcripts WHERE exportId = ? ORDER BY createdAt ASC
 `);
 const countLiveRoomTranscriptsStmt = db.prepare(`
   SELECT COUNT(*) AS count FROM live_room_transcripts WHERE exportId = ?
