@@ -652,6 +652,29 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             ref={transcriptScrollerRef}
             onScroll={handleTranscriptScroll}
           >
+            {team.transcripts.length === 0 && !team.activeSpeakerId ? (
+              <div className="empty-state team-empty-state">
+                <Users size={48} className="empty-state-icon" />
+                <h3>Đang chờ giọng nói trong phòng</h3>
+                <p>Bắt đầu nói hoặc chia sẻ mã phòng cho người khác.</p>
+              </div>
+            ) : (
+              <AnimatePresence initial={false}>
+                {team.transcripts.map((item: TranscriptItem) => (
+                  <TranscriptCard
+                    key={item.id}
+                    item={item}
+                    onDelete={team.deleteTranscript || NoopDelete}
+                    speakOriginal={speakOriginal}
+                    speakAI={speakAI}
+                    playingCardId={playingCardId}
+                    loadingCardId={loadingCardId}
+                    variant="team"
+                  />
+                ))}
+              </AnimatePresence>
+            )}
+
             {(team.interimSource || team.interimTarget || team.activeSpeakerId) && (
               <div className="transcript-card live-preview team-live-preview">
                 <div className="card-meta-bar">
@@ -676,29 +699,6 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
                   </div>
                 </div>
               </div>
-            )}
-
-            {team.transcripts.length === 0 && !team.activeSpeakerId ? (
-              <div className="empty-state team-empty-state">
-                <Users size={48} className="empty-state-icon" />
-                <h3>Đang chờ giọng nói trong phòng</h3>
-                <p>Bắt đầu nói hoặc chia sẻ mã phòng cho người khác.</p>
-              </div>
-            ) : (
-              <AnimatePresence initial={false}>
-                {team.transcripts.map((item: TranscriptItem) => (
-                  <TranscriptCard
-                    key={item.id}
-                    item={item}
-                    onDelete={team.deleteTranscript || NoopDelete}
-                    speakOriginal={speakOriginal}
-                    speakAI={speakAI}
-                    playingCardId={playingCardId}
-                    loadingCardId={loadingCardId}
-                    variant="team"
-                  />
-                ))}
-              </AnimatePresence>
             )}
           </div>
 
