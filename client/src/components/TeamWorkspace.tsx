@@ -81,6 +81,8 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   const [lobbyMode, setLobbyMode] = useState<'create' | 'join' | null>(null);
   const [languagePopupOpen, setLanguagePopupOpen] = useState(false);
   const [restoringRoomId, setRestoringRoomId] = useState('');
+  const transcriptScrollerRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
   const [recentRooms, setRecentRooms] = useState<string[]>(() => {
     try {
       const raw = localStorage.getItem(`team_recent_rooms:${userId}`);
@@ -268,6 +270,10 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
   }, [lobbyMode, recentRooms, recentRoomsKey, token]);
 
   useEffect(() => {
+    shouldAutoScrollRef.current = true;
+  }, [team.roomId]);
+
+  useEffect(() => {
     if (!team.connected || !team.roomId || team.myLanguage) return;
     const savedLanguage = localStorage.getItem(roomLanguageKey(team.roomId));
     if (!savedLanguage || restoredLanguageRef.current === team.roomId) return;
@@ -359,6 +365,26 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
     } catch {
       onShowToast('Không sao chép được link mời.');
     }
+  };
+
+  useEffect(() => {
+    const el = transcriptScrollerRef.current;
+    if (!el) return;
+    if (!shouldAutoScrollRef.current) return;
+
+    window.requestAnimationFrame(() => {
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: 'smooth',
+      });
+    });
+  }, [team.transcripts.length, team.roomId]);
+
+  const handleTranscriptScroll = () => {
+    const el = transcriptScrollerRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    shouldAutoScrollRef.current = distanceFromBottom < 120;
   };
 
   if (!team.connected) {
@@ -621,7 +647,11 @@ export const TeamWorkspace: React.FC<TeamWorkspaceProps> = ({
             </div>
           </div>
 
-          <div className="transcript-scroller team-transcript-scroller">
+          <div
+            className="transcript-scroller team-transcript-scroller"
+            ref={transcriptScrollerRef}
+            onScroll={handleTranscriptScroll}
+          >
             {(team.interimSource || team.interimTarget || team.activeSpeakerId) && (
               <div className="transcript-card live-preview team-live-preview">
                 <div className="card-meta-bar">

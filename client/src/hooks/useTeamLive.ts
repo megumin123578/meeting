@@ -187,12 +187,12 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
     if (!original && !translated) return;
 
     setTranscripts((prev) => [
+      ...prev,
       makeTranscript(original, translated, sourceLang, targetLang, {
         speakerId,
         speakerName: speakerName || undefined,
         isSelf: !!speakerId && speakerId === clientIdRef.current,
       }),
-      ...prev,
     ]);
   }, []);
 
