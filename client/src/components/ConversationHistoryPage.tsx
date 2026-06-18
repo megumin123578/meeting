@@ -253,7 +253,6 @@ export const ConversationHistoryPage: React.FC<ConversationHistoryPageProps> = (
                       <span className="team-history-lang-option">
                         <Flag code={lang.code} />
                         <span>{getLanguageName(lang.code)}</span>
-                        <span className="team-history-lang-code">({lang.code})</span>
                       </span>
                     ),
                   })),
