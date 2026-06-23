@@ -25,6 +25,19 @@ interface RoomConfig {
 const PLAYBACK_RATE = 24000;
 const DEFAULT_MODEL = 'gemini-3.5-live-translate-preview';
 
+function mergeLiveText(current: string, incoming: string): string {
+  if (!incoming) return current;
+  if (!current) return incoming;
+
+  // Google Live can emit the full accumulated transcription repeatedly.
+  // Treat those as snapshots so we don't duplicate text in the buffer.
+  if (incoming === current) return current;
+  if (incoming.startsWith(current)) return incoming;
+  if (current.endsWith(incoming)) return current;
+
+  return current + incoming;
+}
+
 const pick = (obj: AnyObj | undefined, ...keys: string[]): any => {
   if (!obj) return undefined;
   for (const k of keys) if (obj[k] !== undefined) return obj[k];
@@ -287,7 +300,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       'input_audio_transcription'
     );
     if (inputTr?.text) {
-      turnSourceRef.current += inputTr.text;
+      turnSourceRef.current = mergeLiveText(turnSourceRef.current, String(inputTr.text));
       setInterimSource(turnSourceRef.current);
     }
 
@@ -299,7 +312,7 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       'output_audio_transcription'
     );
     if (outputTr?.text) {
-      turnTargetRef.current += outputTr.text;
+      turnTargetRef.current = mergeLiveText(turnTargetRef.current, String(outputTr.text));
       setInterimTarget(turnTargetRef.current);
     }
 

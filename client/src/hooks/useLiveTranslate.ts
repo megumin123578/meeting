@@ -20,6 +20,19 @@ const pick = (obj: AnyObj | undefined, ...keys: string[]): any => {
 
 const PLAYBACK_RATE = 24000;
 
+function mergeLiveText(current: string, incoming: string): string {
+  if (!incoming) return current;
+  if (!current) return incoming;
+
+  // Google Live responses may resend the full accumulated text on each update.
+  // Treat those messages as snapshots instead of blindly appending them.
+  if (incoming === current) return current;
+  if (incoming.startsWith(current)) return incoming;
+  if (current.endsWith(incoming)) return current;
+
+  return current + incoming;
+}
+
 function base64ToInt16(b64: string): Int16Array {
   const bin = atob(b64);
   const len = bin.length;
@@ -182,7 +195,7 @@ export const useLiveTranslate = ({
       'input_audio_transcription'
     );
     if (inputTr?.text) {
-      turnSourceRef.current += inputTr.text;
+      turnSourceRef.current = mergeLiveText(turnSourceRef.current, String(inputTr.text));
       setInterimSource(turnSourceRef.current);
     }
     const outputTr = pick(
@@ -193,7 +206,7 @@ export const useLiveTranslate = ({
       'output_audio_transcription'
     );
     if (outputTr?.text) {
-      turnTargetRef.current += outputTr.text;
+      turnTargetRef.current = mergeLiveText(turnTargetRef.current, String(outputTr.text));
       setInterimTarget(turnTargetRef.current);
     }
 

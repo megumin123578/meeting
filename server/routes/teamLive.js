@@ -76,6 +76,20 @@ function pick(obj, ...keys) {
   return undefined;
 }
 
+function mergeLiveText(current, incoming) {
+  const next = String(incoming || '');
+  if (!next) return current;
+  if (!current) return next;
+
+  // Live API may send the cumulative transcription snapshot on each update.
+  // Preserve the latest snapshot instead of appending duplicates.
+  if (next === current) return current;
+  if (next.startsWith(current)) return next;
+  if (current.endsWith(next)) return current;
+
+  return current + next;
+}
+
 function resetTurnBuffers(room) {
   room.turnSource = '';
   room.turnTarget = '';
@@ -253,7 +267,7 @@ function startSpeaker(room, participant) {
         'input_audio_transcription'
       );
       if (inputTr?.text) {
-        room.turnSource += inputTr.text;
+        room.turnSource = mergeLiveText(room.turnSource, inputTr.text);
       }
       const outputTr = pick(
         content,
@@ -263,7 +277,7 @@ function startSpeaker(room, participant) {
         'output_audio_transcription'
       );
       if (outputTr?.text) {
-        room.turnTarget += outputTr.text;
+        room.turnTarget = mergeLiveText(room.turnTarget, outputTr.text);
       }
       turnComplete = !!(content && (content.turnComplete || content.turn_complete));
     } catch {}
