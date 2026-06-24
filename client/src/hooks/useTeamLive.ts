@@ -87,6 +87,24 @@ function makeTranscript(
   };
 }
 
+function toServerTranscriptItem(item: AnyObj, clientId?: string): TranscriptItem {
+  return {
+    id: String(item.id || crypto.randomUUID()),
+    timestamp: new Date(item.createdAt || Date.now()).toLocaleTimeString('vi-VN', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    }),
+    originalText: String(item.originalText || ''),
+    translatedText: String(item.translatedText || ''),
+    sourceLang: String(item.sourceLang || ''),
+    targetLang: String(item.targetLang || ''),
+    speakerId: item.speakerId || undefined,
+    speakerName: item.speakerName || undefined,
+    isSelf: !!item.speakerId && !!clientId && item.speakerId === clientId,
+  };
+}
+
 export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLiveProps) => {
   const [roomId, setRoomId] = useState('');
   const [clientId, setClientId] = useState('');
@@ -376,6 +394,12 @@ export const useTeamLive = ({ token, voiceEnabled, onShowToast }: UseTeamLivePro
       activeSpeakerNameRef.current = speaker?.username || '';
       setActiveSpeakerName(speaker?.username || '');
       listenerLanguageRef.current = roomParticipants.find((p: TeamParticipant) => p.id === clientIdRef.current)?.language || '';
+      return;
+    }
+
+    if (msg.type === 'room_history') {
+      const items = Array.isArray(msg.transcripts) ? msg.transcripts : [];
+      setTranscripts(items.map((item: AnyObj) => toServerTranscriptItem(item, clientIdRef.current)));
       return;
     }
 

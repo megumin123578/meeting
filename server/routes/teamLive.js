@@ -56,6 +56,21 @@ function publicParticipant(participant) {
   };
 }
 
+function publicTranscript(transcript) {
+  return {
+    id: transcript.id,
+    exportId: transcript.exportId,
+    roomCode: transcript.roomCode,
+    speakerId: transcript.speakerId || null,
+    speakerName: transcript.speakerName || '',
+    originalText: transcript.originalText || '',
+    translatedText: transcript.translatedText || '',
+    sourceLang: transcript.sourceLang || '',
+    targetLang: transcript.targetLang || '',
+    createdAt: transcript.createdAt || new Date().toISOString(),
+  };
+}
+
 function roomState(room) {
   return {
     type: 'room_state',
@@ -178,6 +193,10 @@ function joinRoom(client, user, room, apiKey) {
     existingParticipant.room = room;
     client.teamParticipant = existingParticipant;
     send(client, { type: 'connected', clientId: existingParticipant.id, username: user.username });
+    send(client, {
+      type: 'room_history',
+      transcripts: room.transcripts.map(publicTranscript),
+    });
     broadcast(room, roomState(room));
     return;
   }
@@ -196,6 +215,10 @@ function joinRoom(client, user, room, apiKey) {
   client.teamParticipant = participant;
   room.participants.set(participant.id, participant);
   send(client, { type: 'connected', clientId: participant.id, username: user.username });
+  send(client, {
+    type: 'room_history',
+    transcripts: room.transcripts.map(publicTranscript),
+  });
   broadcast(room, roomState(room));
 }
 
