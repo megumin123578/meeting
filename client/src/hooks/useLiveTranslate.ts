@@ -19,6 +19,12 @@ const pick = (obj: AnyObj | undefined, ...keys: string[]): any => {
 };
 
 const PLAYBACK_RATE = 24000;
+const INPUT_SAMPLE_RATE = 16000;
+const FINAL_SILENCE_FRAME_MS = 200;
+const FINAL_SILENCE_FRAME_COUNT = 5;
+// When a shared tab finishes, Google may need a moment of silence to close its
+// final turn and return the transcription. Keep the socket alive for that turn.
+const FINAL_TURN_TIMEOUT_MS = 5000;
 
 function mergeLiveText(current: string, incoming: string): string {
   if (!incoming) return current;
@@ -81,6 +87,8 @@ export const useLiveTranslate = ({
   const playHeadRef = useRef<number>(0);
   const playGainRef = useRef<GainNode | null>(null);
   const voiceEnabledRef = useRef<boolean>(voiceEnabled);
+  const drainTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isDrainingRef = useRef(false);
 
   // Toggle spoken translation on/off live by muting the playback gain node.
   useEffect(() => {
@@ -99,7 +107,7 @@ export const useLiveTranslate = ({
     turnLangsRef.current = { source: sourceLang, target: targetLang };
   }, [sourceLang, targetLang]);
 
-  const cleanup = useCallback(() => {
+  const stopCapture = useCallback(() => {
     if (workletRef.current) {
       try {
         workletRef.current.port.onmessage = null;
@@ -119,6 +127,16 @@ export const useLiveTranslate = ({
       streamRef.current.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     }
+  }, []);
+
+  const cleanup = useCallback(() => {
+    isDrainingRef.current = false;
+    if (drainTimerRef.current !== null) {
+      clearTimeout(drainTimerRef.current);
+      drainTimerRef.current = null;
+    }
+
+    stopCapture();
 
     if (wsRef.current) {
       try {
@@ -137,9 +155,59 @@ export const useLiveTranslate = ({
     playHeadRef.current = 0;
 
     setIsLive(false);
-  }, []);
+  }, [stopCapture]);
 
   useEffect(() => cleanup, [cleanup]);
+
+  // Save whatever has accumulated in the current (not-yet-completed) turn.
+  const flushTurn = useCallback(() => {
+    const original = turnSourceRef.current.trim();
+    const translated = turnTargetRef.current.trim();
+    turnSourceRef.current = '';
+    turnTargetRef.current = '';
+    setInterimSource('');
+    setInterimTarget('');
+    if (original || translated) {
+      const { source, target } = turnLangsRef.current;
+      onTurnComplete(original, translated, source, target);
+    }
+  }, [onTurnComplete]);
+
+  // Tab audio ending is not equivalent to the Live API turn being complete.
+  // Stop sending audio, then wait for its final transcription/translation.
+  const drainFinalTabTurn = useCallback(() => {
+    if (isDrainingRef.current) return;
+
+    // Mark this before stopping tracks: stopping the stream can synchronously
+    // dispatch another `ended` event for its remaining tracks.
+    isDrainingRef.current = true;
+    stopCapture();
+
+    // An ended MediaStream stops packets abruptly; it does not send the silence
+    // required for server-side VAD to close the final spoken turn. Append one
+    // second of PCM silence explicitly before waiting for turnComplete.
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      const samplesPerFrame = (INPUT_SAMPLE_RATE * FINAL_SILENCE_FRAME_MS) / 1000;
+      const silence = arrayBufferToBase64(new ArrayBuffer(samplesPerFrame * Int16Array.BYTES_PER_ELEMENT));
+      try {
+        for (let i = 0; i < FINAL_SILENCE_FRAME_COUNT; i += 1) {
+          ws.send(JSON.stringify({
+            realtimeInput: {
+              audio: { data: silence, mimeType: `audio/pcm;rate=${INPUT_SAMPLE_RATE}` },
+            },
+          }));
+        }
+      } catch (err) {
+        console.warn('[live] could not send final silence:', err);
+      }
+    }
+    drainTimerRef.current = setTimeout(() => {
+      drainTimerRef.current = null;
+      flushTurn();
+      cleanup();
+    }, FINAL_TURN_TIMEOUT_MS);
+  }, [cleanup, flushTurn, stopCapture]);
 
   const playPcmChunk = useCallback((int16: Int16Array) => {
     if (int16.length === 0) return;
@@ -227,18 +295,14 @@ export const useLiveTranslate = ({
 
     const turnComplete = pick(content, 'turnComplete', 'turn_complete');
     if (turnComplete) {
-      const original = turnSourceRef.current.trim();
-      const translated = turnTargetRef.current.trim();
-      if (original || translated) {
-        const { source, target } = turnLangsRef.current;
-        onTurnComplete(original, translated, source, target);
+      flushTurn();
+      if (isDrainingRef.current) {
+        if (drainTimerRef.current !== null) clearTimeout(drainTimerRef.current);
+        drainTimerRef.current = null;
+        cleanup();
       }
-      turnSourceRef.current = '';
-      turnTargetRef.current = '';
-      setInterimSource('');
-      setInterimTarget('');
     }
-  }, [cleanup, onShowToast, onTurnComplete, playPcmChunk]);
+  }, [cleanup, flushTurn, onShowToast, playPcmChunk]);
 
   const startLive = useCallback(async (audioSource: 'mic' | 'tab' = 'mic') => {
     if (!token) {
@@ -305,8 +369,9 @@ export const useLiveTranslate = ({
         }
         display.getVideoTracks().forEach((t) => t.stop());
         stream = new MediaStream(audioTracks);
-        // If the user stops sharing from the browser bar, end the live session.
-        audioTracks[0].addEventListener('ended', () => cleanup());
+        // A tab ending must be drained: the final transcription normally arrives
+        // shortly after the track's `ended` event.
+        audioTracks[0].addEventListener('ended', drainFinalTabTurn, { once: true });
       } else {
         stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       }
@@ -348,23 +413,7 @@ export const useLiveTranslate = ({
       onShowToast(`❌ Không khởi động được Live: ${err?.message || 'lỗi không xác định'}`);
       cleanup();
     }
-  }, [token, sourceLang, targetLang, model, isLive, handleServerMessage, cleanup, onShowToast]);
-
-  // Save whatever has accumulated in the current (not-yet-completed) turn.
-  // Without this, stopping mid-utterance — or a model that never sends an
-  // explicit turnComplete — would discard the spoken segment unsaved.
-  const flushTurn = useCallback(() => {
-    const original = turnSourceRef.current.trim();
-    const translated = turnTargetRef.current.trim();
-    turnSourceRef.current = '';
-    turnTargetRef.current = '';
-    setInterimSource('');
-    setInterimTarget('');
-    if (original || translated) {
-      const { source, target } = turnLangsRef.current;
-      onTurnComplete(original, translated, source, target);
-    }
-  }, [onTurnComplete]);
+  }, [token, sourceLang, targetLang, model, isLive, handleServerMessage, cleanup, drainFinalTabTurn, onShowToast]);
 
   const stopLive = useCallback(() => {
     flushTurn();
